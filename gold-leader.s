@@ -14,6 +14,10 @@
 	.export		_PALETTES
 	.export		_ATTRIBUTES
 	.importzp	_FrameCount
+	.import		_WaitFrame
+	.import		_UpdateInput
+	.importzp	_JoyPad1
+	.importzp	_PrevJoyPad1
 	.export		_index
 	.export		_attr_offset
 	.export		_ppu_addr
@@ -58,7 +62,8 @@ _ATTRIBUTES:
 	.byte	$90
 	.byte	$C0
 _TEXT:
-	.byte	$48,$65,$6C,$6C,$6F,$20,$57,$6F,$72,$6C,$64,$21,$00
+	.byte	$57,$65,$6C,$63,$6F,$6D,$65,$20,$74,$6F,$20,$48,$45,$4C,$4C,$21
+	.byte	$00
 
 .segment	"BSS"
 
@@ -99,9 +104,9 @@ _ppu_data_size:
 ;
 	lda     #$00
 	sta     _index
-L0080:	lda     _index
+L0088:	lda     _index
 	cmp     _ppu_data_size
-	bcs     L002B
+	bcs     L002D
 ;
 ; PPU_DATA = ppu_data[index];
 ;
@@ -116,11 +121,11 @@ L0080:	lda     _index
 ; for(index = 0; index < ppu_data_size; ++index){
 ;
 	inc     _index
-	jmp     L0080
+	jmp     L0088
 ;
 ; }
 ;
-L002B:	rts
+L002D:	rts
 
 .endproc
 
@@ -235,7 +240,7 @@ L002B:	rts
 ;
 ; ppu_data_size = sizeof(TEXT);
 ;
-	lda     #$0D
+	lda     #$11
 	sta     _ppu_data_size
 ;
 ; WritePPU();
@@ -278,11 +283,22 @@ L002B:	rts
 	lda     #$04
 	sta     _attr_offset
 ;
-; if( FrameCount == FRAMES_PER_SEC * 4 ) {
+; UpdateInput();
 ;
-L0081:	lda     _FrameCount
-	cmp     #$F0
-	bne     L0081
+L006E:	jsr     _UpdateInput
+;
+; WaitFrame();
+;
+	jsr     _WaitFrame
+;
+; if( (JoyPad1 & BUTTON_A) && !(PrevJoyPad1 & BUTTON_A) ) {
+;
+	lda     _JoyPad1
+	and     #$40
+	beq     L006E
+	lda     _PrevJoyPad1
+	and     #$40
+	bne     L006E
 ;
 ; ppu_data = ATTRIBUTES + attr_offset;
 ;
@@ -308,7 +324,7 @@ L0081:	lda     _FrameCount
 ; if( attr_offset == sizeof(ATTRIBUTES)) {
 ;
 	cmp     #$0C
-	bne     L0077
+	bne     L007F
 ;
 ; attr_offset = 0;
 ;
@@ -317,7 +333,7 @@ L0081:	lda     _FrameCount
 ;
 ; ResetScroll();
 ;
-L0077:	jsr     _ResetScroll
+L007F:	jsr     _ResetScroll
 ;
 ; FrameCount = 0;
 ;
@@ -326,7 +342,7 @@ L0077:	jsr     _ResetScroll
 ;
 ; while (1) {
 ;
-	jmp     L0081
+	jmp     L006E
 
 .endproc
 

@@ -1,15 +1,15 @@
 ; Startup code for cc65/ca65
 ; from doug fraker: nesdoug.com
 
-	.import _main
-	.export __STARTUP__:absolute=1
-	.export _WaitFrame, _UpdateInput
-	.exportzp _FrameCount, _JoyPad1, _PrevJoyPad1
+.import _main
+.export __STARTUP__:absolute=1
+.export _WaitFrame, _UpdateInput
+.exportzp _FrameCount, _JoyPad1, _PrevJoyPad1
 
 ; Linker generated symbols
-	.import __STACK_START__, __STACKSIZE__
-    .include "zeropage.inc"
-	.import initlib, copydata
+.import __STACK_START__, __STACKSIZE__
+.include "zeropage.inc"
+.import initlib, copydata
 
 ;variables
 INPUT_1 = $4016
@@ -192,19 +192,14 @@ ReadJoy:
 	; strobe input (write 1, then 0 to sync input)
 	ldx #$01
 	stx INPUT_1
-	dex		; set A to 0
+	dex		
 	stx INPUT_1
 
 	ldy #$08			; put 8 in y register
 
 loop:
 	lda INPUT_1
-	and #$01		; ignore other than controller (7 6 5 4 3 2 1 0)
-
-	; compare against previous read
-
-
-	; if previous read was different, 
+	and #$01		; ignore other than controller (button info stored in bit 0)
 
 	cmp #$01		; set carry iff nonzero
 	rol _JoyPad1	; put carry into bit 0, put bit 7 into carry

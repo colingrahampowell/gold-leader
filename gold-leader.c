@@ -158,7 +158,7 @@ void main (void) {
 		// now we're in vblank for a bit 
 
 		// advance when A button is newly pressed
-		// ignore A if held down
+		// ignore A if held down (require discrete button presses)
 		if( (JoyPad1 & BUTTON_A) && !(PrevJoyPad1 & BUTTON_A) ) {
 			ppu_data = ATTRIBUTES + attr_offset;
 			WritePPU();
