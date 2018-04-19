@@ -1,11 +1,11 @@
 /*
- * nes.h: Useful #defines, header information
+ * ppu.h: Useful PPU-related #defines, header information
  * adapted from Tim Cheeseman's header file:
  * https://github.com/cirla/nesdev/blob/color_in_motion/nes.h
  */
 
-#ifndef NES_H
-#define NES_H
+#ifndef PPU_H
+#define PPU_H
 
 #include <stdint.h>
 
@@ -133,5 +133,9 @@
 #else // TV_PAL (not used here)
   #define FRAMES_PER_SEC 50
 #endif
+
+
+
+
 
 #endif

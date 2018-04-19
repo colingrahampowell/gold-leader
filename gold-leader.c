@@ -3,9 +3,10 @@
  * adapted from: doug fraker, nesdoug.com
  */	
 
-#include "nes.h"
-#include "data.h"
+#include "ppu.h"
+#include "ppu_data.h"
 #include "reset.h"
+#include "input.h"
 #include <stdint.h>
 
 #pragma bss-name(push, "ZEROPAGE")
@@ -148,7 +149,17 @@ void main (void) {
 	//	infinite loop
 	while (1) {
 
-		if( FrameCount == FRAMES_PER_SEC * 4 ) {
+		// reading input...
+		UpdateInput();
+
+		// waiting for vblank...
+		WaitFrame();
+
+		// now we're in vblank for a bit 
+
+		// advance when A button is newly pressed
+		// ignore A if held down
+		if( (JoyPad1 & BUTTON_A) && !(PrevJoyPad1 & BUTTON_A) ) {
 			ppu_data = ATTRIBUTES + attr_offset;
 			WritePPU();
 

@@ -1,13 +1,13 @@
 /*
- * data.h: program data
+ * ppu_data.h: palette- and attribute table-related data
  * adapted from Tim Cheeseman's header file:
  * https://github.com/cirla/nesdev/blob/color_in_motion/data.h
  */
 
-#ifndef DATA_H
-#define DATA_H
+#ifndef PPU_DATA_H
+#define PPU_DATA_H
 
-#include "nes.h"
+#include "ppu.h"
 #include <stdint.h>
 
 /*
@@ -60,7 +60,7 @@ const uint8_t PALETTES[]={
 
 #define TEXT_ATTR_OFFSET ((TEXT_Y / 4)  * (NUM_COLS / 4) + (TEXT_X / 4))
 
-const unsigned char ATTRIBUTES[] = {
+const uint8_t ATTRIBUTES[] = {
     // layout 1 - 0120123
     0x00, // 00 00 00 00 or 0 0
           //                0 0
