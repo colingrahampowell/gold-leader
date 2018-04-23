@@ -7,12 +7,20 @@
 .exportzp _FrameCount, _JoyPad1, _PrevJoyPad1
 
 ; Linker generated symbols
-.import __STACK_START__, __STACKSIZE__
+.import __STACK_START__, __STACK_SIZE__
+.import __OAM_LOAD__
 .include "zeropage.inc"
-.import initlib, copydata
 
 ;variables
-INPUT_1 = $4016
+PPU_CTRL =		$2000
+PPU_MASK = 		$2001
+PPU_STATUS = 	$2002
+OAM_ADDRESS = 	$2003
+APU_DMC = 		$4010
+OAM_DMA = 		$4014
+APU_STATUS = 	$4015
+INPUT_1 = 		$4016
+APU_FRAME_CTR = $4017
 
 .segment "ZEROPAGE"
 
@@ -28,31 +36,51 @@ tmp:			.res 1		; temp var in button reading routing
 .segment "HEADER"
 
     .byte $4e,$45,$53,$1a	; 'NES' - start of every .nes file
-	.byte 01				
-	.byte 01
-	.byte 00
-	.byte 00
-	.res 8,0
+	.byte 01				; size of PRG ROM x 16 KiB 		
+	.byte 01				; size of CHR ROM x 8 KiB
+	.byte 00				; horizontal mirroring, mapper 000 
+	.byte 00				; mapper 000 (NROM)
+	.byte 00				; size of PRG RAM x 8 KiB
+	.byte 00				; NTSC
+	.byte 00				; unused
+	.res 5, $00
 
 
 .segment "STARTUP"
 
 start:
-	sei
-	cld
+	sei				; ignore IRQ
+	cld				; disable decimal mode
+
+	; disable APU frame IRQs
 	ldx #$40
-	stx $4017
+	stx APU_FRAME_CTR
+
+	; setup the stack
 	ldx #$ff
 	txs
-	inx
-	stx $2000
-	stx $2001
-	stx $4010
-:
-	lda $2002
-	bpl :-
+
+	inx					; x = $00
+	stx PPU_CTRL		; disable NMI
+	stx PPU_MASK		; disable rendering
+	stx APU_DMC			; disable DMC IRQs
+
+	; wait for vblank, ensure that PPU has stabilized
+	; clear vblank flag before checking, make sure that 
+	; loop sees an actual vblank
+
+	bit PPU_STATUS
+
+@vblank_wait_1:	 
+	bit PPU_STATUS
+	bpl @vblank_wait_1
+	
+	; disable music channels
+	stx APU_STATUS
+
+	; put zeroes in all CPU RAM
 	lda #$00
-Blankram:			;puts zero in all CPU RAM
+@blankram:			
 	sta $00, x
 	sta $0100, x
 	sta $0200, x
@@ -62,80 +90,39 @@ Blankram:			;puts zero in all CPU RAM
 	sta $0600, x
 	sta $0700, x
 	inx
-	bne Blankram
-	
-:
-	lda $2002
-	bpl :-
+	bne @blankram
 
-Isprites:
-	jsr Blanksprite
-	lda #$00		;pushes all sprites from 200-2ff
-	sta $2003		;to the sprite memory
-	lda #$02
-	sta $4014
-	
-	jsr ClearNT		;puts zero in all PPU RAM
+	; init OAM data to have all y-coords off screen
+	; set every 4th byte (y coord) to 'ef'
 
-MusicInit:			;turns music channels off
-	lda #0
-	sta $4015
+	lda #$ef
+@clear_oam:
+	sta __OAM_LOAD__, x
+	inx 
+	inx 
+	inx 
+	inx
+	bne @clear_oam
 	
-	lda #<(__STACK_START__+__STACKSIZE__)
+	; second wait for vblank
+
+@vblank_wait_2:
+	bit PPU_STATUS
+	bpl @vblank_wait_2
+
+	; init PPU OAM
+	stx OAM_ADDRESS	; $00
+	lda #>(__OAM_LOAD__)
+	sta OAM_DMA
+
+	; set C stack pointer
+	lda #<(__STACK_START__+__STACK_SIZE__)
     sta	sp
-    lda	#>(__STACK_START__+__STACKSIZE__)
-    sta	sp+1      	; Set the c stack pointer
-	
-	jsr	copydata
-	jsr	initlib
-	
-	lda $2002		;reset the 'latch'
+    lda	#>(__STACK_START__+__STACK_SIZE__)
+    sta	sp+1      	
 
-	jmp _main		;jumps to main in c code
-
-
-;
-; Proc: BlankSprite
-; Description: Puts all sprites off screen
-;
-
-_Blanksprite:
-Blanksprite:
-	ldy #$40
-	ldx #$00
-	lda #$f8
-Blanksprite2:		;puts all sprites off screen
-	sta $0200, x
-	inx
-	inx
-	inx
-	inx
-	dey
-	bne Blanksprite2
-	rts
-
-;
-; Proc: ClearNT (internal) 
-; DescriptioN: zeroes PPU RAM
-;
-
-_ClearNT:
-ClearNT:
-	lda $2002
-	lda #$20
-	sta $2006
-	lda #$00
-	sta $2006
-	lda #$00	;tile 00 is blank
-	ldy #$10
-	ldx #$00
-BlankName:		;blanks screen
-	sta $2007
-	dex
-	bne BlankName
-	dey
-	bne BlankName
-	rts
+	lda PPU_STATUS
+	jmp _main
 
 ; 
 ; Proc: WaitFrame (exported / visible to C)
@@ -150,7 +137,6 @@ _WaitFrame:
 	lda frame_done		; load frame_done - set to zero in NMI
 	bne @loop			; will branch if frame_done not 0
 	rts
-
 
 ; 
 ; Proc: UpdateInput (external / visible in C)
@@ -181,7 +167,6 @@ _UpdateInput:
 	bne @mismatch
 
 	rts
-
 
 ;
 ; Proc: ReadJoy (internal)
@@ -224,6 +209,12 @@ nmi:
 
 	; more PPU-related stuff...
 
+	; write OAM DMA buffer to OAM, every frame
+	lda #$0
+	sta OAM_ADDRESS
+	lda #>(__OAM_LOAD__)
+	sta OAM_DMA
+
 	; free _WaitFrame
 	lda #$0
 	sta frame_done
@@ -247,7 +238,6 @@ irq:
     .word nmi	;$fffa vblank nmi
     .word start	;$fffc reset
    	.word irq	;$fffe irq / brk
-
 
 .segment "CHARS"
 

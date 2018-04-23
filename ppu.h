@@ -9,8 +9,6 @@
 
 #include <stdint.h>
 
-#define TV_NTSC
-
 // PPU:
 
 #define PPU_CTRL		*((uint8_t*)0x2000)
@@ -120,12 +118,29 @@
 #define COLOR_WHITE   0x20
 #define COLOR_YELLOW  0x28
 
-// PPU resolution in 8x8 pixel cells
+// PPU resolution
 // see http://wiki.nesdev.com/w/index.php/PPU_nametables
+#define MIN_X        0
+#define MAX_X      256
+#define NUM_COLS    32
 
-#define NUM_COLS 32
-#define NUM_ROWS 30
+#ifdef TV_NTSC
+    #define MIN_Y      8
+    #define MAX_Y    231
+    #define NUM_ROWS  28
+    #define FIRST_ROW  1
+    #define LAST_ROW  27
+#else // TV_PAL
+    #define MIN_Y      0
+    #define MAX_Y    239
+    #define NUM_ROWS  30
+    #define FIRST_ROW  0
+    #define LAST_ROW  29
+#endif
 
+#define NAMETABLE_OFFSET (NUM_COLS * FIRST_ROW)
+#define SPRITE_HEIGHT    8
+#define SPRITE_WIDTH     8
 // PPU framerate
 
 #ifdef TV_NTSC
@@ -134,8 +149,15 @@
   #define FRAMES_PER_SEC 50
 #endif
 
-
-
-
+#define BLANK_TILE 0x05
+#define CORNER_TL 0x00
+#define CORNER_TR 0x01
+#define CORNER_BL 0x10
+#define CORNER_BR 0x11
+#define EDGE_TOP 0x13
+#define EDGE_BOTTOM 0x03
+#define EDGE_LEFT 0x12
+#define EDGE_RIGHT 0x02
+#define SPRITE_SHIP 0x20
 
 #endif

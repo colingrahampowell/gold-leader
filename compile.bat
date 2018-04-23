@@ -10,7 +10,7 @@ cc65 -Oi %name%.c --add-source
 ca65 reset.s
 ca65 %name%.s
 
-ld65 -C nes.cfg -o %name%.nes reset.o %name%.o nes.lib
+ld65 -C gold-leader.cfg -o %name%.nes reset.o %name%.o nes.lib
 
 del *.o
 

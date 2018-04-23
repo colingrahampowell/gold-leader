@@ -3,6 +3,10 @@
  * adapted from: doug fraker, nesdoug.com
  */	
 
+
+#define TV_NTSC
+
+#include "gold-leader.h"
 #include "ppu.h"
 #include "ppu_data.h"
 #include "reset.h"
@@ -10,21 +14,54 @@
 #include <stdint.h>
 
 #pragma bss-name(push, "ZEROPAGE")
-
 //	Globals
-uint8_t index;
+uint8_t index, inner;
 uint8_t attr_offset;
 
 uintptr_t ppu_addr;				// unsigned 16-bit type
 const uint8_t *ppu_data;		// unsigned 8-bit type
 uint8_t ppu_data_size;		// unsigned 8-bit type
-
 #pragma bss-name(pop)
 
-// conveniently, tile locations in pattern table correspond to ASCII vales
-// (so, this works)
+#pragma bss-name(push, "OAM")
+// player 1 sprite
+sprite_t player;
+#pragma bss-name(pop)
 
-const uint8_t TEXT[] = { "Hello World!" };
+/*
+ * DrawBackground():
+ */
+
+void DrawBackground() {
+
+	// write background data, one tile at a time
+	PPU_ADDRESS = (uint8_t) ((PPU_NAMETABLE_0 + NAMETABLE_OFFSET) >> 8); 	// right shift to write only hi-byte
+	PPU_ADDRESS = (uint8_t) (PPU_NAMETABLE_0 + NAMETABLE_OFFSET);		// now write lo byte
+
+	// draw top row
+	PPU_DATA = CORNER_TL;
+	for(index = 0; index < NUM_COLS - 2; ++index) {	
+		PPU_DATA = EDGE_TOP;
+	}
+	PPU_DATA = CORNER_TR;
+
+	// draw middle rows
+	for(index = 0; index < NUM_ROWS - 2; ++index) {
+		PPU_DATA = EDGE_LEFT;
+		for(inner = 0; inner < NUM_COLS - 2; ++inner ) {
+			PPU_DATA = BLANK_TILE;
+		}
+		PPU_DATA = EDGE_RIGHT;
+	}
+
+	// draw bottom row
+	PPU_DATA = CORNER_BL;
+	for(index = 0; index < NUM_COLS - 2; ++index) {	
+		PPU_DATA = EDGE_BOTTOM;
+	}
+	PPU_DATA = CORNER_BR;
+
+}
 
 /* 
  * WritePPU():
@@ -51,8 +88,8 @@ void ResetScroll() {
 	 * first write horizontal offset, then vertical offset to PPUSCROLL
 	 */
 
-	SCROLL = 0;	// horizontal
-	SCROLL = 0;	// vertical
+	SCROLL = 0x00;	// horizontal
+	SCROLL = 0x00;	// vertical
 }
 
 /*
@@ -67,13 +104,16 @@ void EnablePPU() {
 	 * -- generate NMI (non-maskable interrupt) at start of vblank (bit 7)
 	 * -- set sprite size to 8x8 (bit 5 == 0)
 	 * -- set background pattern table to 0x1000 (bit 4 == 1)
-	 * -- set sprite pattern table address to 0x0000 (bit 3 == 0)
+	 * -- set sprite pattern table address to 0x1000 (bit 3 == 1)
 	 * -- set VRAM to inc. address by 1 per CPU read/write, going across (bit 2 == 0) 
 	 * -- set base nametable address to 0x2000 (bit 1 && 0 == 0)
 	 */
 
 	//	turn on screen -- screen is on, NMI on
-	PPU_CTRL = 0x90; 	//	0x90 --> 1001 0000
+	PPU_CTRL = 	PPUCTRL_NAMETABLE_0 | 	// use nametable 0
+				PPUCTRL_BPATTERN_1 	| 	// background uses pattern table 1
+				PPUCTRL_NMI_ON		|	// enable NMI
+				PPUCTRL_SPATTERN_1;		// sprites use pattern table 1
 
 	/*
 	 * PPU_MASK ($2001): PPU Mask Register, controls rendering of sprites / background
@@ -85,9 +125,13 @@ void EnablePPU() {
 	 * -- show background in leftmost 8 pixels of screen (bit 1)
 	 */
 
-	PPU_MASK = 0x1e;	// 0x1e = 0001 1110 
+	PPU_MASK = 	PPUMASK_COLOR 		| 	// show color
+				PPUMASK_BSHOW		|	// show background
+				PPUMASK_L8_BSHOW	|	// show bkgrd tiles in left 8 pixels
+				PPUMASK_SSHOW		|	// show sprites
+				PPUMASK_L8_SSHOW;		// show sprites in left 8 pixels
 
-}
+}				
 
 /*
  * main()
@@ -96,8 +140,8 @@ void EnablePPU() {
 void main (void) {
 
 	//	turn off the screen
-	PPU_CTRL = 0;	// zero-out PPU_CTRL (see below)
-	PPU_MASK = 0;	// zero-out PPU_MASK (see below)
+//	PPU_CTRL = 0;	// zero-out PPU_CTRL (see below)
+//	PPU_MASK = 0;	// zero-out PPU_MASK (see below)
 	
 	/*
 	 * LOADING THE PALETTE: 
@@ -120,60 +164,31 @@ void main (void) {
 	 * -- 1c6: 454th tile, or row 14, col 6
 	*/
 
-	ppu_addr = PPU_NAMETABLE_0 + TEXT_OFFSET;
-	ppu_data = TEXT;
-	ppu_data_size = sizeof(TEXT);
-	WritePPU();
+	DrawBackground();
 
-	/*
-	 * ATTRIBUTE TABLE SETUP:
-	 */ 
+	player.x = MIN_X + SPRITE_WIDTH * 2;
+	player.y = MAX_Y / 2 - SPRITE_HEIGHT / 2;
+	player.tile_idx = SPRITE_SHIP;
 
-	ppu_addr = PPU_ATTRIB_TABLE_0 + TEXT_ATTR_OFFSET;
-	ppu_data = ATTRIBUTES;
-	ppu_data_size = NUM_ATTRS;
-	WritePPU();
-
-	/* 
-	 * DISPLAY:
-	 * now, we've set a nametable (sprite positions), but we haven't
-	 * displayed it: need to tell PPU where to start reading from, 
-	 * by setting scroll position
-	 */
-		
 	ResetScroll();
 	EnablePPU();
 
-	attr_offset = NUM_ATTRS;
-	
-	//	infinite loop
-	while (1) {
-
-		// reading input...
+	while(1) {
 		UpdateInput();
-
-		// waiting for vblank...
 		WaitFrame();
 
-		// now we're in vblank for a bit 
+		// move up
+		if( (JoyPad1 & BUTTON_UP) && (player.y > (MIN_Y + SPRITE_HEIGHT )) ) {
+			player.y -= 2;
+		}
 
-		// advance when A button is newly pressed
-		// ignore A if held down (require discrete button presses)
-		if( (JoyPad1 & BUTTON_A) && !(PrevJoyPad1 & BUTTON_A) ) {
-			ppu_data = ATTRIBUTES + attr_offset;
-			WritePPU();
-
-			attr_offset += NUM_ATTRS;
-			if( attr_offset == sizeof(ATTRIBUTES)) {
-				attr_offset = 0;
-			}
-
-			ResetScroll();
-			FrameCount = 0;
-
+		// move down
+		else if( (JoyPad1 & BUTTON_DOWN) && (player.y < (MAX_Y - 2 * SPRITE_HEIGHT) ) ){
+			player.y += 2;
 		}
 
 	}
-};
+
+}
 	
 	

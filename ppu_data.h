@@ -14,19 +14,30 @@
  * COLOR PALETTE:
  * -- "Each 16px by 16px area associated with a bkgrd palette, and can make use of three colors
  * --  plus bkgrd color"
- * -- We ignore all but last color in each palette for now
  */
 
-const uint8_t PALETTES[]={
-	COLOR_BLUE,			// background color
-	0, 0, COLOR_RED,	// background palette 0
-	0,					// ignored
-	0, 0, COLOR_YELLOW,	// background palette 1
-	0,					// ignored
-	0, 0, COLOR_GREEN,	// background palette 2
-	0,					// ignored
-	0, 0, COLOR_PURPLE	// background palette 3
-}; 
+uint8_t const PALETTES[] = {
+    COLOR_BLACK,                           // background color
+
+    COLOR_BLUE, COLOR_WHITE, COLOR_RED,    // background palette 0
+    0,                                     // ignored
+    0, 0, 0,                               // background palette 1
+    0,                                     // ignored
+    0, 0, 0,                               // background palette 2
+    0,                                     // ignored
+    0, 0, 0,                               // background palette 3
+
+    COLOR_BLACK,                           // background color (mirror)
+
+    COLOR_DGRAY, COLOR_WHITE, COLOR_LGRAY, // sprite palette 0
+    0,                                     // ignored
+    0, 0, 0,                               // sprite palette 1
+    0,                                     // ignored
+    0, 0, 0,                               // sprite palette 2
+    0,                                     // ignored
+    0, 0, 0,                               // sprite palette 3
+};
+
 
 /*
  * ATTRIBUTE TABLE SETUP:
@@ -39,14 +50,6 @@ const uint8_t PALETTES[]={
  *      btm-right:  bits 6-7
  * *NOTE*: In this case, 4 palettes, because "Hello World" covers 4 16x16 tiles
  */
-
-#define NUM_ATTRS 4 // number of attributes 
-#define TEXT_X 10   // 10th col
-#define TEXT_Y 14   // 14th row
-
-// desired offset of text area in nametable 
-#define TEXT_OFFSET ((TEXT_Y * NUM_COLS) + TEXT_X)    // skip 30 * 14 + 10 places into nametable 
-
 /* 
  * offset of attribute table in nametable:
  * -- each nametable is 1kB chunk 
@@ -58,6 +61,7 @@ const uint8_t PALETTES[]={
  * --> instead of 8x8 (1 tile x 1 tile) chunks
  */
 
+/*
 #define TEXT_ATTR_OFFSET ((TEXT_Y / 4)  * (NUM_COLS / 4) + (TEXT_X / 4))
 
 const uint8_t ATTRIBUTES[] = {
@@ -91,5 +95,7 @@ const uint8_t ATTRIBUTES[] = {
     0xc0, // 11 00 00 00 or 0 0
           //                0 3
 };
+
+*/
 
 #endif
