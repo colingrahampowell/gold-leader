@@ -139,25 +139,11 @@
 #endif
 
 #define NAMETABLE_OFFSET (NUM_COLS * FIRST_ROW)
-#define SPRITE_HEIGHT    8
-#define SPRITE_WIDTH     8
-// PPU framerate
 
 #ifdef TV_NTSC
   #define FRAMES_PER_SEC 60
 #else // TV_PAL (not used here)
   #define FRAMES_PER_SEC 50
 #endif
-
-#define BLANK_TILE 0x05
-#define CORNER_TL 0x00
-#define CORNER_TR 0x01
-#define CORNER_BL 0x10
-#define CORNER_BR 0x11
-#define EDGE_TOP 0x13
-#define EDGE_BOTTOM 0x03
-#define EDGE_LEFT 0x12
-#define EDGE_RIGHT 0x02
-#define SPRITE_SHIP 0x20
 
 #endif

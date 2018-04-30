@@ -29,7 +29,7 @@ uint8_t const PALETTES[] = {
 
     COLOR_BLACK,                           // background color (mirror)
 
-    COLOR_DGRAY, COLOR_WHITE, COLOR_LGRAY, // sprite palette 0
+    COLOR_WHITE, COLOR_BLUE, COLOR_LGRAY,   // sprite palette 0
     0,                                     // ignored
     0, 0, 0,                               // sprite palette 1
     0,                                     // ignored
