@@ -180,7 +180,7 @@ ReadJoy:
 	dex		
 	stx INPUT_1
 
-	ldy #$08			; put 8 in y register
+	ldy #$08		; put 8 in y register
 
 loop:
 	lda INPUT_1
@@ -206,8 +206,6 @@ nmi:
 	pha		; push y (stored in a)
 
 	inc _FrameCount	; increment frame counter	
-
-	; more PPU-related stuff...
 
 	; write OAM DMA buffer to OAM, every frame
 	lda #$0
@@ -241,4 +239,4 @@ irq:
 
 .segment "CHARS"
 
-	.incbin "Alpha.chr"
+	.incbin "tiles.chr"
