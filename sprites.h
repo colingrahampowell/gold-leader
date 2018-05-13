@@ -38,17 +38,6 @@ typedef struct metasprite {
 
 #define MAX_SPRITES 64
 
-// demo background tiles
-#define BLANK_TILE 0x05
-#define CORNER_TL 0x00
-#define CORNER_TR 0x01
-#define CORNER_BL 0x10
-#define CORNER_BR 0x11
-#define EDGE_TOP 0x13
-#define EDGE_BOTTOM 0x03
-#define EDGE_LEFT 0x12
-#define EDGE_RIGHT 0x02
-
 // sprites
 #define SHIP_SPRITE_LEVEL 0x00
 #define SHIP_SPRITE_BANK_UP 0x03
@@ -58,5 +47,6 @@ typedef struct metasprite {
 #define LASER_SPRITE 0x09
 
 #define MAX_LASERS 5
+#define LASER_SPEED 0x08
 
 #endif

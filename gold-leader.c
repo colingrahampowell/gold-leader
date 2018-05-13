@@ -11,14 +11,14 @@
 #include "reset.h"
 #include "input.h"
 #include "sprites.h"
+#include "background.h"
 #include <stdint.h>
 
 #pragma bss-name(push, "ZEROPAGE")
 
 //	global counters, etc. (place in zero page for speed)
 uint8_t i, j;
-uint16_t overflow_checker;
-
+uint8_t new_laser_pos;
 uint8_t row;
 uint8_t col;
 
@@ -26,7 +26,6 @@ uint8_t attr_offset;
 uint8_t curr_sprite;
 
 uint8_t laser_count;
-uint8_t offscreen_lasers;
 
 uintptr_t ppu_addr;			// unsigned 16-bit type
 const uint8_t *ppu_data;	// unsigned 8-bit type
@@ -87,14 +86,12 @@ void DrawBackground() {
  */
 
 void WritePPU() {
-
 	PPU_ADDRESS = (uint8_t) (ppu_addr >> 8); 	// right shift to write only hi-byte
 	PPU_ADDRESS = (uint8_t) (ppu_addr);		// now write lo byte
 	
 	for(i = 0; i < ppu_data_size; ++i){
 		PPU_DATA = ppu_data[i];
 	}	
-
 }
 
 /* 
@@ -163,9 +160,9 @@ void WriteMetaSpriteToOAM(metasprite_t* mspr) {
 		row = i / player.num_h_sprites;
 		col = i % player.num_h_sprites;
 
-		oam_sprites[curr_sprite].x = mspr->left_x + (SPRITE_WIDTH * col);
 		oam_sprites[curr_sprite].y = mspr->top_y + (SPRITE_HEIGHT * row);
 		oam_sprites[curr_sprite].tile_idx = mspr->sprite_offsets[i];
+		oam_sprites[curr_sprite].x = mspr->left_x + (SPRITE_WIDTH * col);
 		oam_sprites[curr_sprite].attr = 0x00;
 
 		++curr_sprite;
@@ -178,13 +175,67 @@ void WriteMetaSpriteToOAM(metasprite_t* mspr) {
  */
 
 void WriteSpriteToOAM(sprite_t* spr) {
-
-	oam_sprites[curr_sprite].x = spr->x;
-	oam_sprites[curr_sprite].y = spr->y;
-	oam_sprites[curr_sprite].tile_idx = spr->tile_idx;
-	oam_sprites[curr_sprite].attr = 0x00;
-
+//	if (spr->y < MAX_Y) {
+		oam_sprites[curr_sprite].y = spr->y;
+		oam_sprites[curr_sprite].tile_idx = spr->tile_idx;
+		oam_sprites[curr_sprite].x = spr->x;
+		oam_sprites[curr_sprite].attr = 0x00;
+		++curr_sprite;
+//	}
 }
+
+/*
+ * update laser positions: 
+ */
+
+int CheckOffscreenLasers() {
+
+	int offscreen_lasers = 0;
+
+	for(i = 0; i < MAX_LASERS; ++i ) {
+		if( lasers[i].y < MAX_Y) {
+			new_laser_pos = lasers[i].x + LASER_SPEED;
+			// if overflow, new pos < old pos
+			// also possible that x > offscreen position (0xf9-0xff)
+			if( lasers[i].x > new_laser_pos || lasers[i].x >= OFFSCREEN_X ) {
+				lasers[i].y = MAX_Y; // offscreen
+				++offscreen_lasers;
+	//				player.sprite offsets = ship_bank_down;
+			}
+			else {
+				lasers[i].x = new_laser_pos;
+			}
+		}
+	}
+
+	return offscreen_lasers;
+}
+
+/*
+ * Adds a laser to the screen
+ * laser fires from nose of ship:
+ * xx(x) <-- this tile
+ * xxx
+ */
+
+void AddLaser() {
+	// track max number of lasers on screen
+	if(laser_count < MAX_LASERS) {
+		i = 0;
+		// find a spot for new laser, update pos
+		while( i < MAX_LASERS ) {
+			if(lasers[i].y >= MAX_Y) {
+				lasers[i].x = player.left_x + player.num_h_sprites + SPRITE_WIDTH;
+				lasers[i].y = player.top_y;
+				++laser_count;
+				break;
+			}					
+			++i;
+		}
+	}
+}
+
+
 
 /*
  * main()
@@ -262,6 +313,7 @@ void main (void) {
 
 	laser_count = 0;
 	for(i = 0; i < MAX_LASERS; ++i) {
+		lasers[i].y = 0xff;	// offscreen
 		lasers[i].tile_idx = LASER_SPRITE;
 	}
 
@@ -269,14 +321,11 @@ void main (void) {
 	EnablePPU();
 
 	while(1) {
-		
+
 		// wait for vblank to update display
+		curr_sprite = 0;	
+
 		WaitFrame();
-
-		curr_sprite = 0;
-		offscreen_lasers = 0;
-		// read input
-
 		UpdateInput();
 
 		// update sprite based on input (change sprite to simulate left/right bank manuever)
@@ -285,14 +334,12 @@ void main (void) {
 			player.sprite_offsets = ship_bank_up;
 		}
 		else if((JoyPad1 & BUTTON_DOWN) && 
-				(player.sprite_offsets != ship_bank_down) ) {
-	
+				(player.sprite_offsets != ship_bank_down) ) {	
 			player.sprite_offsets = ship_bank_down;
 		}
 		else if( !(JoyPad1 & BUTTON_UP) && 
 				 !(JoyPad1 & BUTTON_DOWN) && 
 				 (player.sprite_offsets != ship_level ) ) {
-
 			player.sprite_offsets = ship_level;
 		}
 
@@ -303,7 +350,6 @@ void main (void) {
 
 		if( (JoyPad1 & BUTTON_UP) && 
 			(player.top_y > (MIN_Y + SPRITE_HEIGHT )) ) {
-
 			player.top_y -= 2;
 		}
 
@@ -314,10 +360,8 @@ void main (void) {
 		 */
 
 		if( (JoyPad1 & BUTTON_DOWN) && 
-			( (player.top_y + player.num_v_sprites + SPRITE_HEIGHT) < (MAX_Y - 2 * SPRITE_HEIGHT) ) ){
-		
+			( (player.top_y + player.num_v_sprites + SPRITE_HEIGHT) < (MAX_Y - 2 * SPRITE_HEIGHT) ) ){	
 			player.top_y += 2;
-		
 		}
 
 		/* 
@@ -326,9 +370,7 @@ void main (void) {
 
 		if( (JoyPad1 & BUTTON_RIGHT) && 
 			( (player.left_x + player.num_h_sprites + SPRITE_WIDTH) < (MAX_X - 2 * SPRITE_WIDTH ) ) ) {
-
-			player.left_x += 2;
-		
+			player.left_x += 2;	
 		} 
 
 		/*
@@ -337,9 +379,7 @@ void main (void) {
 
 		if( (JoyPad1 & BUTTON_LEFT) && 
 			( (player.left_x ) > (MIN_X + SPRITE_WIDTH) ) ) {
-
 			player.left_x -= 1;
-
 		} 
 
 		/* 
@@ -347,58 +387,21 @@ void main (void) {
 		 */
 
 		if( JoyPad1 & BUTTON_A && !(PrevJoyPad1 & BUTTON_A) ) {
-
-			/* 
-			 * laser fires from nose of ship:
-			 * xx(x) <-- this tile
-			 * xxx
-			 */
-
-			if(laser_count < MAX_LASERS) {
-				lasers[laser_count].x = player.left_x + player.num_h_sprites + SPRITE_WIDTH;
-				lasers[laser_count].y = player.top_y;
-
-				++laser_count;
-			}
+			AddLaser();
 		}
-
-		/*
-		 * update laser positions: this needs debugging
-		 */
-	
-		for(i = 0; i < laser_count; ++i ) {
-
-			overflow_checker = (uint16_t) lasers[i].x;
-
-			overflow_checker += 24;
-
-			if( overflow_checker > MAX_X) {
-				lasers[i].y = MIN_Y - SPRITE_HEIGHT;
-				++offscreen_lasers;
-
-			}
-			else {
-				lasers[i].x = (uint8_t) overflow_checker;
-			}
-		
-		}	
-
-		laser_count -= offscreen_lasers;	
+		laser_count -= CheckOffscreenLasers();
 
 		/*
 		 * write updated data to OAM
 		 */
 
 		WriteMetaSpriteToOAM(&player);
-
-		for(i = 0; i < laser_count; ++i) {
+		for(i = 0; i < MAX_LASERS; ++i) {
 			WriteSpriteToOAM( &(lasers[i]) );
 		}
 
-
+		ResetScroll();
 	}
-
-
 }
 	
 	

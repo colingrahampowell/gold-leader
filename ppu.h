@@ -122,6 +122,7 @@
 // see http://wiki.nesdev.com/w/index.php/PPU_nametables
 #define MIN_X        0
 #define MAX_X      256
+#define OFFSCREEN_X 249
 #define NUM_COLS    32
 
 #ifdef TV_NTSC
