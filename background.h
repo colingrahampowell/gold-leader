@@ -4,11 +4,7 @@
 
 #ifndef BACKGROUND_H
 #define BACKGROUND_H
-
 #include <stdint.h>
-
-// defined in reset.s
-void __fastcall__ UnRLE(uint8_t *data);
 
 // demo background tiles
 #define BLANK_TILE 0x00
@@ -20,9 +16,5 @@ void __fastcall__ UnRLE(uint8_t *data);
 #define EDGE_BOTTOM 0x03
 #define EDGE_LEFT 0x12
 #define EDGE_RIGHT 0x02
-
-uint8_t nametable_0[255] = { 0 };
-
-
 
 #endif
