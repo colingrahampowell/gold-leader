@@ -33,11 +33,6 @@ uintptr_t ppu_addr;			// unsigned 16-bit type
 const uint8_t *ppu_data;	// unsigned 8-bit type
 uint8_t ppu_data_size;		// unsigned 8-bit type
 
-// nametable-to-sprite mapping tables
-uint8_t ship_level[ SHIP_SPRITE_HOR_TILES * SHIP_SPRITE_VERT_TILES ];
-uint8_t ship_bank_up[ SHIP_SPRITE_HOR_TILES * SHIP_SPRITE_VERT_TILES ];
-uint8_t ship_bank_down[ SHIP_SPRITE_HOR_TILES * SHIP_SPRITE_VERT_TILES ];
-
 // player 1 sprite (3 tiles wide x 2 tiles tall)
 metasprite_t player;
 sprite_t lasers[MAX_LASERS];
@@ -144,7 +139,9 @@ void EnablePPU() {
 
 void WriteMetaSpriteToOAM(metasprite_t* mspr) {
 
-    for( i = 0; i < (player.num_v_sprites * player.num_h_sprites); ++i ) {
+    int total_sprites = player.num_v_sprites * player.num_h_sprites;
+
+    for( i = 0; i < total_sprites; ++i ) {
 
         row = i / player.num_h_sprites;
         col = i % player.num_h_sprites;
@@ -164,11 +161,13 @@ void WriteMetaSpriteToOAM(metasprite_t* mspr) {
  */
 
 void WriteSpriteToOAM(sprite_t* spr) {
+
     oam_sprites[curr_sprite].y = spr->y;
     oam_sprites[curr_sprite].tile_idx = spr->tile_idx;
     oam_sprites[curr_sprite].x = spr->x;
     oam_sprites[curr_sprite].attr = 0x00;
     ++curr_sprite;
+
 }
 
 /*
@@ -259,35 +258,12 @@ void main (void) {
 
     curr_sprite = 0;
 
-    // this is very goofy...find a way to init this data in an array somewhere
-
-    ship_level[0] = 0x00;
-    ship_level[1] = 0x01;
-    ship_level[2] = 0x02;
-    ship_level[3] = 0x10;
-    ship_level[4] = 0x11;
-    ship_level[5] = 0x12;
-
-    ship_bank_up[0] = 0x03;
-    ship_bank_up[1] = 0x04;
-    ship_bank_up[2] = 0x05;
-    ship_bank_up[3] = 0x13;
-    ship_bank_up[4] = 0x14;
-    ship_bank_up[5] = 0x15;
-
-    ship_bank_down[0] = 0x06;
-    ship_bank_down[1] = 0x07;
-    ship_bank_down[2] = 0x08;
-    ship_bank_down[3] = 0x16;
-    ship_bank_down[4] = 0x17;
-    ship_bank_down[5] = 0x18;
-
     /* 
      * init player sprite
      */
 
-    player.left_x =  (MIN_X + SPRITE_WIDTH * 2);
-    player.top_y = (MAX_Y / 2 - SPRITE_HEIGHT / 2);
+    player.left_x = ( MIN_X + (SPRITE_WIDTH << 1) );
+    player.top_y = ( (MAX_Y >> 1) - (SPRITE_HEIGHT >> 1) );
     player.num_h_sprites = SHIP_SPRITE_HOR_TILES;
     player.num_v_sprites = SHIP_SPRITE_VERT_TILES;
     player.sprite_offsets = ship_level;
@@ -355,7 +331,7 @@ void main (void) {
          */
 
         if( (JoyPad1 & BUTTON_DOWN) && 
-            ( (player.top_y + player.num_v_sprites + SPRITE_HEIGHT) < (MAX_Y - 2 * SPRITE_HEIGHT) ) ){	
+            ( (player.top_y + player.num_v_sprites + SPRITE_HEIGHT) < ( MAX_Y - (SPRITE_HEIGHT << 1) ) ) ){	
             player.top_y += 2;
         }
 
@@ -364,7 +340,7 @@ void main (void) {
          */
 
         if( (JoyPad1 & BUTTON_RIGHT) && 
-            ( (player.left_x + player.num_h_sprites + SPRITE_WIDTH) < (MAX_X - 2 * SPRITE_WIDTH ) ) ) {
+            ( (player.left_x + player.num_h_sprites + SPRITE_WIDTH) < (MAX_X - (SPRITE_WIDTH << 1) ) ) ) {
             player.left_x += 2;	
         } 
 
