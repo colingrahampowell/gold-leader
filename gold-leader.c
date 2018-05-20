@@ -70,41 +70,6 @@ void DrawBackgroundRLE() {
     
 }
 
-/*
- * DrawBackground():
- */
-
-void DrawBackground() {
-
-    // write background data, one tile at a time
-    PPU_ADDRESS = (uint8_t) ((PPU_NAMETABLE_0 + NAMETABLE_OFFSET) >> 8); 	// right shift to write only hi-byte
-    PPU_ADDRESS = (uint8_t) (PPU_NAMETABLE_0 + NAMETABLE_OFFSET);		// now write lo byte
-
-    // draw top row
-    PPU_DATA = CORNER_TL;
-    for(i = 0; i < NUM_COLS - 2; ++i) {	
-        PPU_DATA = EDGE_TOP;
-    }
-    PPU_DATA = CORNER_TR;
-
-    // draw middle rows
-    for(i = 0; i < NUM_ROWS - 2; ++i) {
-        PPU_DATA = EDGE_LEFT;
-        for(j = 0; j < NUM_COLS - 2; ++j ) {
-            PPU_DATA = BLANK_TILE;
-        }
-        PPU_DATA = EDGE_RIGHT;
-    }
-
-    // draw bottom row
-    PPU_DATA = CORNER_BL;
-    for(i = 0; i < NUM_COLS - 2; ++i) {	
-        PPU_DATA = EDGE_BOTTOM;
-    }
-    PPU_DATA = CORNER_BR;
-
-}
-
 /* 
  * WritePPU():
  */
