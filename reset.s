@@ -3,7 +3,7 @@
 
 .import _main
 .export __STARTUP__:absolute=1
-.export _WaitFrame, _UpdateInput, UnRLE
+.export _WaitFrame, _UpdateInput, _UnRLE
 .exportzp _FrameCount, _JoyPad1, _PrevJoyPad1
 
 ; Linker generated symbols
@@ -45,7 +45,7 @@ RLE_BYTE:		.res 1
     .byte $4e,$45,$53,$1a	; 'NES' - start of every .nes file
 	.byte 01				; size of PRG ROM x 16 KiB 		
 	.byte 01				; size of CHR ROM x 8 KiB
-	.byte 00				; horizontal mirroring, mapper 000 
+	.byte 01				; vertical mirroring (left to right), mapper 000 
 	.byte 00				; mapper 000 (NROM)
 	.byte 00				; size of PRG RAM x 8 KiB
 	.byte 00				; NTSC

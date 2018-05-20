@@ -19,7 +19,7 @@
 uint8_t const PALETTES[] = {
     COLOR_BLACK,                           // background color
 
-    COLOR_BLUE, COLOR_WHITE, COLOR_RED,    // background palette 0
+    COLOR_BLUE, COLOR_RED, COLOR_PURPLE,    // background palette 0
     0,                                     // ignored
     0, 0, 0,                               // background palette 1
     0,                                     // ignored

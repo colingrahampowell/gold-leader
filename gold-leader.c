@@ -22,6 +22,8 @@ uint8_t new_laser_pos;
 uint8_t row;
 uint8_t col;
 
+uint8_t h_scroll;
+
 uint8_t attr_offset;
 uint8_t curr_sprite;
 
@@ -45,6 +47,26 @@ sprite_t lasers[MAX_LASERS];
 #pragma bss-name(push, "OAM")
 sprite_t oam_sprites[64];
 #pragma bss-name(pop)
+
+/*
+ * DrawBackgroundRLE():
+ */
+
+void DrawBackgroundRLE() {
+	
+	// set address of nametable 0
+	PPU_ADDRESS = (uint8_t) ((PPU_NAMETABLE_0 + NAMETABLE_OFFSET) >> 8); 	// right shift to write only hi-byte
+	PPU_ADDRESS = (uint8_t) (PPU_NAMETABLE_0 + NAMETABLE_OFFSET);		// now write lo ebyte
+
+	// decompress and draw nametable 0
+	UnRLE(nametable_0);
+
+	// set address of nametable 1
+	PPU_ADDRESS = (uint8_t) ((PPU_NAMETABLE_1 + NAMETABLE_OFFSET) >> 8); 	// right shift to write only hi-byte
+	PPU_ADDRESS = (uint8_t) (PPU_NAMETABLE_1 + NAMETABLE_OFFSET);		// now write lo ebyte
+	UnRLE(nametable_1);
+    
+}
 
 /*
  * DrawBackground():
@@ -264,7 +286,8 @@ void main (void) {
 	 * -- 1c6: 454th tile, or row 14, col 6
 	*/
 
-	DrawBackground();
+	DrawBackgroundRLE();
+	h_scroll = 0;
 
 	/*
 	 * SPRITE SETUP
@@ -322,10 +345,18 @@ void main (void) {
 
 	while(1) {
 
-		// wait for vblank to update display
-		curr_sprite = 0;	
+		curr_sprite = 0;
 
+		// wait for graphics data to be updated in nmi
 		WaitFrame();
+	
+		// wait for vblank to update display
+		curr_sprite = 0;
+		h_scroll += 1;
+
+		SCROLL = h_scroll;	// horizontal
+		SCROLL = 0x0;
+
 		UpdateInput();
 
 		// update sprite based on input (change sprite to simulate left/right bank manuever)
@@ -400,7 +431,6 @@ void main (void) {
 			WriteSpriteToOAM( &(lasers[i]) );
 		}
 
-		ResetScroll();
 	}
 }
 	
