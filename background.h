@@ -44,16 +44,4 @@ const uint8_t nametable_1[212]={
 0x73,0x00,0x05,0x00
 };
 
-
-// demo background tiles
-#define BLANK_TILE 0x00
-#define CORNER_TL 0x04
-#define CORNER_TR 0x01
-#define CORNER_BL 0x10
-#define CORNER_BR 0x14
-#define EDGE_TOP 0x13
-#define EDGE_BOTTOM 0x03
-#define EDGE_LEFT 0x12
-#define EDGE_RIGHT 0x02
-
 #endif
