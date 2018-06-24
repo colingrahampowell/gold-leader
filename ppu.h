@@ -1,15 +1,21 @@
 /*
- * ppu.h: Useful PPU-related #defines, header information
- * adapted from Tim Cheeseman's header file:
- * https://github.com/cirla/nesdev/blob/color_in_motion/nes.h
+ * Colin Powell
+ * PPU base: base PPU header file
  */
 
 #ifndef PPU_H
 #define PPU_H
-
 #include <stdint.h>
 
-// PPU:
+/*
+ * text display constants
+ */
+
+#define ALPHA_START 0x11
+
+/* 
+ * PPU Constants:
+ */
 
 #define PPU_CTRL		*((uint8_t*)0x2000)
 #define PPU_MASK		*((uint8_t*)0x2001)
@@ -57,13 +63,9 @@
 #define PPUMASK_SHIDE    0x00
 #define PPUMASK_SSHOW    0x10
 
-#ifdef TV_NTSC
-    #define PPUMASK_EM_RED   0x20
-    #define PPUMASK_EM_GREEN 0x40
-#else // TV_PAL (not used here)
-    #define PPUMASK_EM_RED   0x40
-    #define PPUMASK_EM_GREEN 0x20
-#endif
+// NTSC Only
+#define PPUMASK_EM_RED   0x20
+#define PPUMASK_EM_GREEN 0x40
 
 #define PPUMASK_EM_BLUE  0x80
 
@@ -81,10 +83,18 @@
 #define PPU_NAMETABLE_2     0x2800 // nametable 2
 #define PPU_NAMETABLE_3     0x2c00 // nametable 3
 
+/*
+ * attribute table mem locations
+ */
+
 #define PPU_ATTRIB_TABLE_0  0x23c0 // attribute table for nametable 0
 #define PPU_ATTRIB_TABLE_1  0x27c0 // attribute table for nametable 1
 #define PPU_ATTRIB_TABLE_2  0x2bc0 // attribute table for nametable 2
 #define PPU_ATTRIB_TABLE_3  0x2fc0 // attribute table for nametable 3
+
+/* 
+ * palette mem locations
+ */
 
 #define PPU_PALETTE         0x3f00 // palette memory
 #define PPU_PALLETE_BGC     0x3f00 // universal background color
@@ -97,27 +107,6 @@
 #define PPU_PALETTE_SP_2    0x3f19 // sprite palette 2
 #define PPU_PALETTE_SP_3    0x3f1d // sprite palette 3
 
-// PPU palette colors
-// see http://wiki.nesdev.com/w/index.php/PPU_palettes
-
-#define COLOR_AQUA    0x1c
-#define COLOR_BLACK   0x0f
-#define COLOR_BLUE    0x12
-#define COLOR_BROWN   0x17
-#define COLOR_DGRAY   0x00
-#define COLOR_GREEN   0x1a
-#define COLOR_LIME    0x2a
-#define COLOR_LGRAY   0x10
-#define COLOR_MAGENTA 0x24
-#define COLOR_MAROON  0x06
-#define COLOR_NAVY    0x02
-#define COLOR_OLIVE   0x18
-#define COLOR_PURPLE  0x14
-#define COLOR_RED     0x16
-#define COLOR_TEAL    0x2c
-#define COLOR_WHITE   0x20
-#define COLOR_YELLOW  0x28
-
 // PPU resolution
 // see http://wiki.nesdev.com/w/index.php/PPU_nametables
 #define MIN_X        0
@@ -125,26 +114,56 @@
 #define OFFSCREEN_X 249
 #define NUM_COLS    32
 
-#ifdef TV_NTSC
-    #define MIN_Y      8
-    #define MAX_Y    231
-    #define NUM_ROWS  28
-    #define FIRST_ROW  1
-    #define LAST_ROW  27
-#else // TV_PAL
-    #define MIN_Y      0
-    #define MAX_Y    239
-    #define NUM_ROWS  30
-    #define FIRST_ROW  0
-    #define LAST_ROW  29
-#endif
+// TV_NTSC
+#define MIN_Y      8
+#define MAX_Y    231
+#define NUM_ROWS  28
+#define FIRST_ROW  1
+#define LAST_ROW  27
 
 #define NAMETABLE_OFFSET (NUM_COLS * FIRST_ROW)
 
-#ifdef TV_NTSC
-  #define FRAMES_PER_SEC 60
-#else // TV_PAL (not used here)
-  #define FRAMES_PER_SEC 50
-#endif
+/*
+ * sprite-related constants
+ */
+
+#define SPRITE_HEIGHT    8
+#define SPRITE_WIDTH     8
+#define MAX_SPRITES 64
+
+// defined in reset.s
+void __fastcall__ UnRLE(const uint8_t *data);
+void __fastcall__ DrawBackgroundRLE(const uint8_t* nametable, const uint8_t table_num);
+void __fastcall__ LoadPalette(const uint8_t* palette, const uint8_t size);
+void _WritePPU(void);
+void ResetScroll(void);
+void EnablePPU(void);
+
+/*
+ * sprite: 4 bytes representing a single sprite in the game
+ * (order is important here - maps to sprite representation in memory)
+ */ 
+
+typedef struct sprite {
+    uint8_t y;          // y pos
+    uint8_t tile_idx;   // index into patt table
+    uint8_t attr;       // attribute flags
+    uint8_t x;          // x pos
+} sprite_t;
+
+
+/*
+ * metasprite: defines an entity (player, enemy, etc.) in the
+ * game that is comprised of a series of sprites.
+ */ 
+
+typedef struct metasprite {
+    uint8_t left_x;
+    uint8_t top_y;
+    uint8_t num_h_sprites;
+    uint8_t num_v_sprites;
+    const uint8_t* sprite_offsets;
+    uint8_t ticks;  // time onscreen
+} metasprite_t;
 
 #endif

@@ -9,8 +9,9 @@
 extern unsigned char FrameCount;    // we're identifying FrameCount as unsigned int 
 #pragma zpsym ("FrameCount");       // identify FrameCount as zeropage symbol 
 
-void WaitFrame(void);                   // implemented in reset.s
-void UpdateInput(void);
+void WaitFrame(void);               // implemented in reset.s
+void UpdateInput(void);             
+void Debug(void);
 
 #endif
 

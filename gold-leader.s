@@ -11,77 +11,53 @@
 	.importzp	tmp1, tmp2, tmp3, tmp4, ptr1, ptr2, ptr3, ptr4
 	.macpack	longbranch
 	.forceimport	__STARTUP__
-	.export		_PALETTES
-	.import		_WaitFrame
-	.import		_UpdateInput
-	.importzp	_JoyPad1
-	.importzp	_PrevJoyPad1
 	.export		_ship_level
 	.export		_ship_bank_up
 	.export		_ship_bank_down
-	.import		_UnRLE
+	.export		_rolly_state_1
 	.export		_nametable_0
 	.export		_nametable_1
+	.export		_PALETTES
+	.import		_DrawBackgroundRLE
+	.import		_LoadPalette
+	.import		_ResetScroll
+	.import		_EnablePPU
+	.import		_WaitFrame
+	.import		_UpdateInput
+	.import		_Debug
+	.importzp	_JoyPad1
+	.importzp	_PrevJoyPad1
+	.import		_rand
+	.export		_global_test_1
+	.export		_global_test_2
 	.export		_i
 	.export		_j
 	.export		_new_laser_pos
 	.export		_row
 	.export		_col
+	.export		_game_clock
 	.export		_h_scroll
 	.export		_attr_offset
 	.export		_curr_sprite
-	.export		_laser_count
-	.export		_ppu_addr
-	.export		_ppu_data
-	.export		_ppu_data_size
 	.export		_player
 	.export		_lasers
+	.export		_laser_count
+	.export		_rollys
+	.export		_rolly_count
+	.export		_new_rolly_pos
+	.export		_offscreen_rollys
 	.export		_oam_sprites
-	.export		_DrawBackgroundRLE
-	.export		_WritePPU
-	.export		_ResetScroll
-	.export		_EnablePPU
 	.export		_WriteMetaSpriteToOAM
 	.export		_WriteSpriteToOAM
 	.export		_CheckOffscreenLasers
 	.export		_AddLaser
+	.export		_UpdatePlayerSprite
+	.export		_MovePlayer
+	.export		_AddEnemies
 	.export		_main
 
 .segment	"RODATA"
 
-_PALETTES:
-	.byte	$0F
-	.byte	$12
-	.byte	$16
-	.byte	$14
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$0F
-	.byte	$20
-	.byte	$12
-	.byte	$10
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
-	.byte	$00
 _ship_level:
 	.byte	$00
 	.byte	$01
@@ -103,6 +79,11 @@ _ship_bank_down:
 	.byte	$16
 	.byte	$17
 	.byte	$18
+_rolly_state_1:
+	.byte	$20
+	.byte	$21
+	.byte	$30
+	.byte	$31
 _nametable_0:
 	.byte	$05
 	.byte	$00
@@ -529,10 +510,47 @@ _nametable_1:
 	.byte	$00
 	.byte	$05
 	.byte	$00
+_PALETTES:
+	.byte	$0F
+	.byte	$12
+	.byte	$16
+	.byte	$14
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$0F
+	.byte	$20
+	.byte	$12
+	.byte	$10
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
+	.byte	$00
 
 .segment	"BSS"
 
 .segment	"ZEROPAGE"
+_global_test_1:
+	.res	1,$00
+_global_test_2:
+	.res	1,$00
 _i:
 	.res	1,$00
 _j:
@@ -543,177 +561,34 @@ _row:
 	.res	1,$00
 _col:
 	.res	1,$00
+_game_clock:
+	.res	2,$00
 _h_scroll:
 	.res	1,$00
 _attr_offset:
 	.res	1,$00
 _curr_sprite:
 	.res	1,$00
-_laser_count:
-	.res	1,$00
-_ppu_addr:
-	.res	2,$00
-_ppu_data:
-	.res	2,$00
-_ppu_data_size:
-	.res	1,$00
 _player:
-	.res	6,$00
+	.res	7,$00
 _lasers:
 	.res	20,$00
+_laser_count:
+	.res	1,$00
+_rollys:
+	.res	28,$00
+_rolly_count:
+	.res	1,$00
+_new_rolly_pos:
+	.res	1,$00
+_offscreen_rollys:
+	.res	1,$00
 .segment	"OAM"
 _oam_sprites:
 	.res	256,$00
 
 ; ---------------------------------------------------------------
-; void __near__ DrawBackgroundRLE (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_DrawBackgroundRLE: near
-
-.segment	"CODE"
-
-;
-; PPU_ADDRESS = (uint8_t) ((PPU_NAMETABLE_0 + NAMETABLE_OFFSET) >> 8);  // right shift to write only hi-byte
-;
-	lda     #$20
-	sta     $2006
-;
-; PPU_ADDRESS = (uint8_t) (PPU_NAMETABLE_0 + NAMETABLE_OFFSET);  // now write lo ebyte
-;
-	sta     $2006
-;
-; UnRLE(nametable_0);
-;
-	lda     #<(_nametable_0)
-	ldx     #>(_nametable_0)
-	jsr     _UnRLE
-;
-; PPU_ADDRESS = (uint8_t) ((PPU_NAMETABLE_1 + NAMETABLE_OFFSET) >> 8);  // right shift to write only hi-byte
-;
-	lda     #$24
-	sta     $2006
-;
-; PPU_ADDRESS = (uint8_t) (PPU_NAMETABLE_1 + NAMETABLE_OFFSET);  // now write lo ebyte
-;
-	lda     #$20
-	sta     $2006
-;
-; UnRLE(nametable_1);
-;
-	lda     #<(_nametable_1)
-	ldx     #>(_nametable_1)
-	jmp     _UnRLE
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ WritePPU (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_WritePPU: near
-
-.segment	"CODE"
-
-;
-; PPU_ADDRESS = (uint8_t) (ppu_addr >> 8);  // right shift to write only hi-byte
-;
-	lda     _ppu_addr+1
-	sta     $2006
-;
-; PPU_ADDRESS = (uint8_t) (ppu_addr);  // now write lo byte
-;
-	lda     _ppu_addr
-	sta     $2006
-;
-; for(i = 0; i < ppu_data_size; ++i){
-;
-	lda     #$00
-	sta     _i
-L0328:	lda     _i
-	cmp     _ppu_data_size
-	bcs     L020E
-;
-; PPU_DATA = ppu_data[i];
-;
-	lda     _ppu_data
-	ldx     _ppu_data+1
-	ldy     _i
-	sta     ptr1
-	stx     ptr1+1
-	lda     (ptr1),y
-	sta     $2007
-;
-; for(i = 0; i < ppu_data_size; ++i){
-;
-	inc     _i
-	jmp     L0328
-;
-; }
-;
-L020E:	rts
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ ResetScroll (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_ResetScroll: near
-
-.segment	"CODE"
-
-;
-; SCROLL = 0x00; // horizontal
-;
-	lda     #$00
-	sta     $2005
-;
-; SCROLL = 0x00; // vertical
-;
-	sta     $2005
-;
-; }
-;
-	rts
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ EnablePPU (void)
-; ---------------------------------------------------------------
-
-.segment	"CODE"
-
-.proc	_EnablePPU: near
-
-.segment	"CODE"
-
-;
-; PPUCTRL_SPATTERN_0;  // sprites use pattern table 0
-;
-	lda     #$90
-	sta     $2000
-;
-; PPUMASK_L8_SSHOW;  // show sprites in left 8 pixels
-;
-	lda     #$1E
-	sta     $2001
-;
-; } 
-;
-	rts
-
-.endproc
-
-; ---------------------------------------------------------------
-; void __near__ WriteMetaSpriteToOAM (__near__ struct metasprite *)
+; void __near__ __fastcall__ WriteMetaSpriteToOAM (__near__ struct metasprite *)
 ; ---------------------------------------------------------------
 
 .segment	"CODE"
@@ -723,52 +598,101 @@ L020E:	rts
 .segment	"CODE"
 
 ;
-; void WriteMetaSpriteToOAM(metasprite_t* mspr) {
+; void __fastcall__ WriteMetaSpriteToOAM(metasprite_t* mspr) {
 ;
 	jsr     pushax
 ;
-; int total_sprites = player.num_v_sprites * player.num_h_sprites;
+; uint8_t row = 0;
 ;
-	lda     _player+3
-	jsr     pusha0
-	lda     _player+2
-	jsr     tosumula0
-	jsr     pushax
-;
-; for( i = 0; i < total_sprites; ++i ) {
-;
+	jsr     decsp1
 	lda     #$00
-	sta     _i
-	tax
-L032C:	lda     _i
-	ldy     #$00
-	cmp     (sp),y
-	txa
-	iny
-	sbc     (sp),y
-	bcc     L032D
+	jsr     pusha
+;
+; uint8_t sprite_base_offset = 0;
+;
+	jsr     pusha
+;
+; uint8_t height_offset = SPRITE_HEIGHT;
+;
+	lda     #$08
+	jsr     pusha
+;
+; for( ; row < mspr->num_v_sprites; ++row ) {
+;
+	ldy     #$02
+L0387:	lda     (sp),y
+	jsr     pusha0
+	ldy     #$07
+	lda     (sp),y
+	sta     ptr1+1
+	dey
+	lda     (sp),y
+	sta     ptr1
+	ldy     #$03
+	lda     (ptr1),y
+	jsr     tosicmp0
+	bcc     L0388
 ;
 ; }
 ;
-	jmp     incsp4
+	jmp     incsp6
 ;
-; row = i / player.num_h_sprites;
+; sprite_base_offset = row * mspr->num_h_sprites;
 ;
-L032D:	lda     _i
+L0388:	ldy     #$02
+	lda     (sp),y
 	jsr     pusha0
-	lda     _player+2
-	jsr     tosudiva0
-	sta     _row
+	ldy     #$07
+	lda     (sp),y
+	sta     ptr1+1
+	dey
+	lda     (sp),y
+	sta     ptr1
+	ldy     #$02
+	lda     (ptr1),y
+	jsr     tosumula0
+	ldy     #$01
+	sta     (sp),y
 ;
-; col = i % player.num_h_sprites;
+; global_test_1 = sprite_base_offset;
 ;
-	lda     _i
+	sta     _global_test_1
+;
+; height_offset = SPRITE_HEIGHT * row;
+;
+	iny
+	lda     (sp),y
+	asl     a
+	asl     a
+	asl     a
+	ldy     #$00
+	sta     (sp),y
+;
+; for(col = 0; col < mspr->num_h_sprites; ++col ) {
+;
+	tya
+	ldy     #$03
+L0384:	sta     (sp),y
+	lda     (sp),y
 	jsr     pusha0
-	lda     _player+2
-	jsr     tosumoda0
-	sta     _col
+	ldy     #$07
+	lda     (sp),y
+	sta     ptr1+1
+	dey
+	lda     (sp),y
+	sta     ptr1
+	ldy     #$02
+	lda     (ptr1),y
+	jsr     tosicmp0
+	jcs     L01F5
 ;
-; oam_sprites[curr_sprite].y = mspr->top_y + (SPRITE_HEIGHT * row);
+; global_test_2 = col;
+;
+	ldy     #$03
+	lda     (sp),y
+	sta     _global_test_2
+;
+; oam_sprites[curr_sprite].y = mspr->top_y + height_offset;
 ;
 	ldx     #$00
 	lda     _curr_sprite
@@ -779,37 +703,32 @@ L032D:	lda     _i
 	txa
 	adc     #>(_oam_sprites)
 	sta     sreg+1
-	ldy     #$03
+	ldy     #$05
 	lda     (sp),y
 	sta     ptr1+1
 	dey
 	lda     (sp),y
 	sta     ptr1
-	dey
+	ldy     #$01
 	lda     (ptr1),y
 	sta     ptr1
-	lda     _row
-	asl     a
-	asl     a
-	asl     a
+	dey
+	lda     (sp),y
 	clc
 	adc     ptr1
-	dey
 	sta     (sreg),y
 ;
-; oam_sprites[curr_sprite].tile_idx = mspr->sprite_offsets[i];
+; oam_sprites[curr_sprite].tile_idx = mspr->sprite_offsets[col + sprite_base_offset];
 ;
 	ldx     #$00
 	lda     _curr_sprite
 	jsr     aslax2
 	clc
 	adc     #<(_oam_sprites)
-	tay
+	sta     sreg
 	txa
 	adc     #>(_oam_sprites)
-	tax
-	tya
-	jsr     pushax
+	sta     sreg+1
 	ldy     #$05
 	lda     (sp),y
 	sta     ptr1+1
@@ -821,12 +740,26 @@ L032D:	lda     _i
 	tax
 	dey
 	lda     (ptr1),y
-	ldy     _i
 	sta     ptr1
 	stx     ptr1+1
-	lda     (ptr1),y
+	ldx     #$00
 	ldy     #$01
-	jsr     staspidx
+	lda     (sp),y
+	clc
+	ldy     #$03
+	adc     (sp),y
+	bcc     L0385
+	inx
+	clc
+L0385:	adc     ptr1
+	sta     ptr1
+	txa
+	adc     ptr1+1
+	sta     ptr1+1
+	ldy     #$00
+	lda     (ptr1),y
+	iny
+	sta     (sreg),y
 ;
 ; oam_sprites[curr_sprite].x = mspr->left_x + (SPRITE_WIDTH * col);
 ;
@@ -839,7 +772,7 @@ L032D:	lda     _i
 	txa
 	adc     #>(_oam_sprites)
 	sta     sreg+1
-	ldy     #$03
+	ldy     #$05
 	lda     (sp),y
 	sta     ptr1+1
 	dey
@@ -848,13 +781,13 @@ L032D:	lda     _i
 	ldy     #$00
 	lda     (ptr1),y
 	sta     ptr1
-	lda     _col
+	ldy     #$03
+	lda     (sp),y
 	asl     a
 	asl     a
 	asl     a
 	clc
 	adc     ptr1
-	ldy     #$03
 	sta     (sreg),y
 ;
 ; oam_sprites[curr_sprite].attr = 0x00;
@@ -876,11 +809,22 @@ L032D:	lda     _i
 ;
 	inc     _curr_sprite
 ;
-; for( i = 0; i < total_sprites; ++i ) {
+; for(col = 0; col < mspr->num_h_sprites; ++col ) {
 ;
-	tax
-	inc     _i
-	jmp     L032C
+	iny
+	clc
+	lda     #$01
+	adc     (sp),y
+	jmp     L0384
+;
+; for( ; row < mspr->num_v_sprites; ++row ) {
+;
+L01F5:	ldy     #$02
+	clc
+	lda     #$01
+	adc     (sp),y
+	sta     (sp),y
+	jmp     L0387
 
 .endproc
 
@@ -1004,21 +948,26 @@ L032D:	lda     _i
 .segment	"CODE"
 
 ;
-; int offscreen_lasers = 0;
+; uint8_t offscreen_lasers = 0;
 ;
-	jsr     push0
+	lda     #$00
+	jsr     pusha
+;
+; uint8_t i = 0;
+;
+	jsr     pusha
 ;
 ; for(i = 0; i < MAX_LASERS; ++i ) {
 ;
-	sta     _i
-L032F:	lda     _i
+	tay
+L038A:	sta     (sp),y
 	cmp     #$05
-	jcs     L0256
+	jcs     L022A
 ;
 ; if( lasers[i].y < MAX_Y) {
 ;
 	ldx     #$00
-	lda     _i
+	lda     (sp),y
 	jsr     aslax2
 	sta     ptr1
 	txa
@@ -1028,12 +977,12 @@ L032F:	lda     _i
 	ldy     #<(_lasers)
 	lda     (ptr1),y
 	cmp     #$E7
-	jcs     L0333
+	jcs     L022B
 ;
 ; new_laser_pos = lasers[i].x + LASER_SPEED;
 ;
 	ldx     #$00
-	lda     _i
+	lda     (sp,x)
 	jsr     aslax2
 	clc
 	adc     #<(_lasers)
@@ -1050,7 +999,7 @@ L032F:	lda     _i
 ; if( lasers[i].x > new_laser_pos || lasers[i].x >= OFFSCREEN_X ) {
 ;
 	ldx     #$00
-	lda     _i
+	lda     (sp,x)
 	jsr     aslax2
 	clc
 	adc     #<(_lasers)
@@ -1058,15 +1007,16 @@ L032F:	lda     _i
 	txa
 	adc     #>(_lasers)
 	sta     ptr1+1
+	ldy     #$03
 	ldx     #$00
 	lda     (ptr1),y
 	sec
 	sbc     _new_laser_pos
 	sta     tmp1
 	lda     tmp1
-	beq     L0330
-	bcs     L0334
-L0330:	lda     _i
+	beq     L0389
+	bcs     L038B
+L0389:	lda     (sp,x)
 	jsr     aslax2
 	clc
 	adc     #<(_lasers)
@@ -1074,16 +1024,16 @@ L0330:	lda     _i
 	txa
 	adc     #>(_lasers)
 	sta     ptr1+1
+	ldy     #$03
 	lda     (ptr1),y
 	cmp     #$F9
-	bcs     L0331
-	ldx     #$00
-	jmp     L0332
+	bcc     L0238
 ;
 ; lasers[i].y = MAX_Y; // offscreen
 ;
-L0331:	ldx     #$00
-L0334:	lda     _i
+L038B:	ldy     #$00
+	ldx     #$00
+	lda     (sp),y
 	jsr     aslax2
 	clc
 	adc     #<(_lasers)
@@ -1092,22 +1042,24 @@ L0334:	lda     _i
 	adc     #>(_lasers)
 	sta     ptr1+1
 	lda     #$E7
-	ldy     #$00
 	sta     (ptr1),y
 ;
 ; ++offscreen_lasers;
 ;
-	ldx     #$00
-	lda     #$01
-	jsr     addeq0sp
+	iny
+	clc
+	tya
+	adc     (sp),y
+	sta     (sp),y
 ;
 ; else {
 ;
-	jmp     L0333
+	jmp     L022B
 ;
 ; lasers[i].x = new_laser_pos;
 ;
-L0332:	lda     _i
+L0238:	ldx     #$00
+	lda     (sp,x)
 	jsr     aslax2
 	clc
 	adc     #<(_lasers)
@@ -1116,20 +1068,22 @@ L0332:	lda     _i
 	adc     #>(_lasers)
 	sta     ptr1+1
 	lda     _new_laser_pos
+	ldy     #$03
 	sta     (ptr1),y
 ;
 ; for(i = 0; i < MAX_LASERS; ++i ) {
 ;
-L0333:	inc     _i
-	jmp     L032F
+L022B:	ldy     #$00
+	clc
+	lda     #$01
+	adc     (sp),y
+	jmp     L038A
 ;
 ; return offscreen_lasers;
 ;
-L0256:	ldy     #$01
+L022A:	iny
 	lda     (sp),y
-	tax
-	dey
-	lda     (sp),y
+	ldx     #$00
 ;
 ; }
 ;
@@ -1148,24 +1102,29 @@ L0256:	ldy     #$01
 .segment	"CODE"
 
 ;
+; uint8_t i = 0;
+;
+	lda     #$00
+	jsr     pusha
+;
 ; if(laser_count < MAX_LASERS) {
 ;
 	lda     _laser_count
 	cmp     #$05
-	bcs     L0278
+	bcs     L024D
 ;
 ; i = 0;
 ;
-	ldx     #$00
-	stx     _i
+	lda     #$00
+	tay
 ;
 ; while( i < MAX_LASERS ) {
 ;
-	jmp     L0339
+	jmp     L038D
 ;
 ; if(lasers[i].y >= MAX_Y) {
 ;
-L0337:	lda     _i
+L0390:	lda     (sp),y
 	jsr     aslax2
 	sta     ptr1
 	txa
@@ -1175,12 +1134,12 @@ L0337:	lda     _i
 	ldy     #<(_lasers)
 	lda     (ptr1),y
 	cmp     #$E7
-	bcc     L0338
+	bcc     L0250
 ;
 ; lasers[i].x = player.left_x + player.num_h_sprites + SPRITE_WIDTH;
 ;
 	ldx     #$00
-	lda     _i
+	lda     (sp,x)
 	jsr     aslax2
 	clc
 	adc     #<(_lasers)
@@ -1191,16 +1150,17 @@ L0337:	lda     _i
 	lda     _player
 	clc
 	adc     _player+2
-	bcc     L0336
+	bcc     L038E
 	clc
-L0336:	adc     #$08
+L038E:	adc     #$08
 	ldy     #$03
 	sta     (ptr1),y
 ;
 ; lasers[i].y = player.top_y;
 ;
+	ldy     #$00
 	ldx     #$00
-	lda     _i
+	lda     (sp),y
 	jsr     aslax2
 	clc
 	adc     #<(_lasers)
@@ -1209,7 +1169,6 @@ L0336:	adc     #$08
 	adc     #>(_lasers)
 	sta     ptr1+1
 	lda     _player+1
-	ldy     #$00
 	sta     (ptr1),y
 ;
 ; ++laser_count;
@@ -1218,22 +1177,290 @@ L0336:	adc     #$08
 ;
 ; break;
 ;
-	rts
+	jmp     incsp1
 ;
 ; ++i;
 ;
-L0338:	inc     _i
+L0250:	ldy     #$00
+	clc
+	lda     #$01
+	adc     (sp),y
+L038D:	sta     (sp),y
 ;
 ; while( i < MAX_LASERS ) {
 ;
 	ldx     #$00
-L0339:	lda     _i
+	lda     (sp),y
 	cmp     #$05
-	bcc     L0337
+	bcc     L0390
 ;
 ; }
 ;
-L0278:	rts
+L024D:	jmp     incsp1
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ UpdatePlayerSprite (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_UpdatePlayerSprite: near
+
+.segment	"CODE"
+
+;
+; if( (JoyPad1 & BUTTON_UP) && player.sprite_offsets != ship_bank_up) {
+;
+	lda     _JoyPad1
+	and     #$08
+	beq     L0397
+	lda     #<(_ship_bank_up)
+	ldx     #>(_ship_bank_up)
+	cpx     _player+4+1
+	bne     L025E
+	cmp     _player+4
+	beq     L0397
+;
+; player.sprite_offsets = ship_bank_up;
+;
+L025E:	lda     #<(_ship_bank_up)
+	sta     _player+4
+	lda     #>(_ship_bank_up)
+;
+; else if((JoyPad1 & BUTTON_DOWN) && 
+;
+	jmp     L0394
+L0397:	lda     _JoyPad1
+	and     #$04
+	beq     L039A
+;
+; (player.sprite_offsets != ship_bank_down) ) {         
+;
+	lda     #<(_ship_bank_down)
+	ldx     #>(_ship_bank_down)
+	cpx     _player+4+1
+	bne     L0266
+	cmp     _player+4
+	beq     L039A
+;
+; player.sprite_offsets = ship_bank_down;
+;
+L0266:	lda     #<(_ship_bank_down)
+	sta     _player+4
+	lda     #>(_ship_bank_down)
+;
+; else if( !(JoyPad1 & BUTTON_UP) && 
+;
+	jmp     L0394
+L039A:	lda     _JoyPad1
+	and     #$08
+	bne     L039B
+;
+; !(JoyPad1 & BUTTON_DOWN) && 
+;
+	lda     _JoyPad1
+	and     #$04
+	bne     L039B
+;
+; (player.sprite_offsets != ship_level ) ) {
+;
+	lda     #<(_ship_level)
+	ldx     #>(_ship_level)
+	cpx     _player+4+1
+	bne     L026F
+	cmp     _player+4
+	bne     L026F
+L039B:	rts
+;
+; player.sprite_offsets = ship_level;
+;
+L026F:	lda     #<(_ship_level)
+	sta     _player+4
+	lda     #>(_ship_level)
+L0394:	sta     _player+4+1
+;
+; }
+;
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ MovePlayer (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_MovePlayer: near
+
+.segment	"CODE"
+
+;
+; if( (JoyPad1 & BUTTON_UP) && 
+;
+	lda     _JoyPad1
+	and     #$08
+	beq     L03A3
+;
+; (player.top_y > (MIN_Y + SPRITE_HEIGHT )) ) {
+;
+	lda     _player+1
+	cmp     #$11
+	bcc     L03A3
+;
+; player.top_y -= 2;
+;
+	sec
+	sbc     #$02
+	sta     _player+1
+;
+; if( (JoyPad1 & BUTTON_DOWN) && 
+;
+L03A3:	lda     _JoyPad1
+	and     #$04
+	beq     L03A6
+;
+; ( (player.top_y + player.num_v_sprites + SPRITE_HEIGHT) < ( MAX_Y - (SPRITE_HEIGHT << 1) ) ) ){ 
+;
+	ldx     #$00
+	lda     _player+1
+	clc
+	adc     _player+3
+	bcc     L039E
+	inx
+	clc
+L039E:	adc     #$08
+	bcc     L0287
+	inx
+L0287:	cpx     #$00
+	bne     L028A
+	cmp     #$D7
+L028A:	bcs     L03A6
+;
+; player.top_y += 2;
+;
+	lda     #$02
+	clc
+	adc     _player+1
+	sta     _player+1
+;
+; if( (JoyPad1 & BUTTON_RIGHT) && 
+;
+L03A6:	lda     _JoyPad1
+	and     #$01
+	beq     L03A9
+;
+; ( (player.left_x + player.num_h_sprites + SPRITE_WIDTH) < (MAX_X - (SPRITE_WIDTH << 1) ) ) ) {
+;
+	ldx     #$00
+	lda     _player
+	clc
+	adc     _player+2
+	bcc     L039F
+	inx
+	clc
+L039F:	adc     #$08
+	bcc     L0294
+	inx
+L0294:	cpx     #$00
+	bne     L0297
+	cmp     #$F0
+L0297:	bcs     L03A9
+;
+; player.left_x += 2; 
+;
+	lda     #$02
+	clc
+	adc     _player
+	sta     _player
+;
+; if( (JoyPad1 & BUTTON_LEFT) && 
+;
+L03A9:	lda     _JoyPad1
+	and     #$02
+	beq     L03AB
+;
+; ( (player.left_x ) > (MIN_X) ) ) {
+;
+	lda     _player
+	bne     L03AC
+L03AB:	rts
+;
+; player.left_x -= 1;
+;
+L03AC:	dec     _player
+;
+; }
+;
+	rts
+
+.endproc
+
+; ---------------------------------------------------------------
+; void __near__ AddEnemies (void)
+; ---------------------------------------------------------------
+
+.segment	"CODE"
+
+.proc	_AddEnemies: near
+
+.segment	"CODE"
+
+;
+; if( ((game_clock % 120) == 0) && (rolly_count < MAX_ROLLYS)) {
+;
+	lda     _game_clock
+	ldx     _game_clock+1
+	jsr     pushax
+	lda     #$78
+	jsr     tosumoda0
+	cpx     #$00
+	bne     L02AB
+	cmp     #$00
+	bne     L02AB
+	lda     _rolly_count
+	cmp     #$04
+	bcc     L03AE
+L02AB:	rts
+;
+; rollys[rolly_count].left_x = MAX_X - 0x01;
+;
+L03AE:	lda     _rolly_count
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #$FF
+	ldy     #$00
+	sta     (ptr1),y
+;
+; rollys[rolly_count].top_y = MAX_Y >> 0x02;
+;
+	ldx     #$00
+	lda     _rolly_count
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #$39
+	iny
+	sta     (ptr1),y
+;
+; ++rolly_count;
+;
+	inc     _rolly_count
+;
+; }
+;
+	rts
 
 .endproc
 
@@ -1248,40 +1475,43 @@ L0278:	rts
 .segment	"CODE"
 
 ;
-; ppu_addr = PPU_PALETTE; // 0x3f00: palette memory
+; game_clock = 0;
 ;
-	ldx     #$3F
 	lda     #$00
-	sta     _ppu_addr
-	stx     _ppu_addr+1
-;
-; ppu_data = PALETTES; 
-;
-	lda     #<(_PALETTES)
-	sta     _ppu_data
-	lda     #>(_PALETTES)
-	sta     _ppu_data+1
-;
-; ppu_data_size = sizeof(PALETTES);
-;
-	lda     #$20
-	sta     _ppu_data_size
-;
-; WritePPU();
-;
-	jsr     _WritePPU
-;
-; DrawBackgroundRLE();
-;
-	jsr     _DrawBackgroundRLE
+	sta     _game_clock
+	sta     _game_clock+1
 ;
 ; h_scroll = 0;
 ;
-	lda     #$00
 	sta     _h_scroll
+;
+; LoadPalette(PALETTES, sizeof(PALETTES));
+;
+	lda     #<(_PALETTES)
+	ldx     #>(_PALETTES)
+	jsr     pushax
+	lda     #$20
+	jsr     _LoadPalette
+;
+; DrawBackgroundRLE(nametable_0, 0);
+;
+	lda     #<(_nametable_0)
+	ldx     #>(_nametable_0)
+	jsr     pushax
+	lda     #$00
+	jsr     _DrawBackgroundRLE
+;
+; DrawBackgroundRLE(nametable_1, 1);
+;
+	lda     #<(_nametable_1)
+	ldx     #>(_nametable_1)
+	jsr     pushax
+	lda     #$01
+	jsr     _DrawBackgroundRLE
 ;
 ; curr_sprite = 0;
 ;
+	lda     #$00
 	sta     _curr_sprite
 ;
 ; player.left_x = ( MIN_X + (SPRITE_WIDTH << 1) );
@@ -1311,12 +1541,6 @@ L0278:	rts
 	lda     #>(_ship_level)
 	sta     _player+4+1
 ;
-; WriteMetaSpriteToOAM(&player); // write player sprite to OAM
-;
-	lda     #<(_player)
-	ldx     #>(_player)
-	jsr     _WriteMetaSpriteToOAM
-;
 ; laser_count = 0;
 ;
 	lda     #$00
@@ -1325,9 +1549,9 @@ L0278:	rts
 ; for(i = 0; i < MAX_LASERS; ++i) {
 ;
 	sta     _i
-L0342:	lda     _i
+L03AF:	lda     _i
 	cmp     #$05
-	bcs     L02A9
+	bcs     L03B0
 ;
 ; lasers[i].y = 0xff; // offscreen
 ;
@@ -1362,36 +1586,367 @@ L0342:	lda     _i
 ; for(i = 0; i < MAX_LASERS; ++i) {
 ;
 	inc     _i
-	jmp     L0342
+	jmp     L03AF
+;
+; rolly_count = 0;
+;
+L03B0:	lda     #$00
+	sta     _rolly_count
+;
+; offscreen_rollys = 0;
+;
+	sta     _offscreen_rollys
+;
+; for(i = 0; i < MAX_ROLLYS; ++i) {
+;
+	sta     _i
+L03B1:	lda     _i
+	cmp     #$04
+	jcs     L02EA
+;
+; rollys[i].num_h_sprites = ROLLY_HOR_TILES;
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #$02
+	tay
+	sta     (ptr1),y
+;
+; rollys[i].num_v_sprites = ROLLY_VERT_TILES;
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	tya
+	iny
+	sta     (ptr1),y
+;
+; rollys[i].sprite_offsets = rolly_state_1;
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #<(_rolly_state_1)
+	iny
+	sta     (ptr1),y
+	iny
+	lda     #>(_rolly_state_1)
+	sta     (ptr1),y
+;
+; rollys[i].ticks = 0;
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #$00
+	iny
+	sta     (ptr1),y
+;
+; rollys[i].top_y = MAX_Y + (SPRITE_HEIGHT);    // offscreen
+;
+	tax
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #$EF
+	ldy     #$01
+	sta     (ptr1),y
+;
+; rollys[i].left_x = MAX_X;   // offscreen   
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #$00
+	dey
+	sta     (ptr1),y
+;
+; for(i = 0; i < MAX_ROLLYS; ++i) {
+;
+	inc     _i
+	jmp     L03B1
 ;
 ; ResetScroll();
 ;
-L02A9:	jsr     _ResetScroll
+L02EA:	jsr     _ResetScroll
 ;
 ; EnablePPU();
 ;
 	jsr     _EnablePPU
 ;
-; curr_sprite = 0;
-;
-L0343:	lda     #$00
-	sta     _curr_sprite
-;
 ; WaitFrame();
 ;
-	jsr     _WaitFrame
+L0306:	jsr     _WaitFrame
 ;
 ; curr_sprite = 0;
 ;
 	lda     #$00
 	sta     _curr_sprite
 ;
-; h_scroll += 1;
+; if( ((game_clock % 60) == 0) && (rolly_count < MAX_ROLLYS)) {
+;
+	lda     _game_clock
+	ldx     _game_clock+1
+	jsr     pushax
+	lda     #$3C
+	jsr     tosumoda0
+	cpx     #$00
+	jne     L03B6
+	cmp     #$00
+	jne     L03B6
+	lda     _rolly_count
+	cmp     #$04
+	jcs     L03B6
+;
+; if(rolly_count < MAX_ROLLYS) {
+;
+	cmp     #$04
+	bcs     L03B3
+;
+; player.sprite_offsets = ship_bank_down;
+;
+	lda     #<(_ship_bank_down)
+	sta     _player+4
+	lda     #>(_ship_bank_down)
+	sta     _player+4+1
+;
+; for(i = 0; i < MAX_ROLLYS; ++i) {
+;
+L03B3:	stx     _i
+L03B4:	lda     _i
+	cmp     #$04
+	bcs     L03B6
+;
+; if( rollys[i].top_y > MAX_Y ) {
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	ldy     #$01
+	lda     (ptr1),y
+	cmp     #$E8
+	bcc     L03B5
+;
+; rollys[i].left_x = (MAX_X - SPRITE_WIDTH << 0x01);
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #$F0
+	dey
+	sta     (ptr1),y
+;
+; rollys[i].top_y = SPRITE_HEIGHT + (rand() % (MAX_Y - SPRITE_HEIGHT) );
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	tay
+	txa
+	adc     #>(_rollys)
+	tax
+	tya
+	jsr     pushax
+	jsr     _rand
+	jsr     pushax
+	ldx     #$00
+	lda     #$DF
+	jsr     tosmoda0
+	clc
+	adc     #$08
+	ldy     #$01
+	jsr     staspidx
+;
+; ++rolly_count;
+;
+	inc     _rolly_count
+;
+; break;
+;
+	jmp     L03B6
+;
+; for(i = 0; i < MAX_ROLLYS; ++i) {
+;
+L03B5:	inc     _i
+	jmp     L03B4
+;
+; offscreen_rollys = 0;
+;
+L03B6:	lda     #$00
+	sta     _offscreen_rollys
+;
+; for(i = 0; i < MAX_ROLLYS; ++i) {
+;
+	sta     _i
+L03B8:	lda     _i
+	cmp     #$04
+	jcs     L03BC
+;
+; if( rollys[i].top_y <= MAX_Y) {
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	ldy     #$01
+	lda     (ptr1),y
+	cmp     #$E8
+	jcs     L03BB
+;
+; new_rolly_pos = rollys[i].left_x -= ROLLY_SPEED;
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	dey
+	lda     (ptr1),y
+	sec
+	sbc     #$02
+	sta     (ptr1),y
+	sta     _new_rolly_pos
+;
+; if( rollys[i].left_x < new_rolly_pos || rollys[i].left_x == 0 ) {
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	sta     ptr1
+	txa
+	clc
+	adc     #>(_rollys)
+	sta     ptr1+1
+	ldy     #<(_rollys)
+	ldx     #$00
+	lda     (ptr1),y
+	cmp     _new_rolly_pos
+	bcc     L03C4
+	lda     _i
+	jsr     mulax7
+	sta     ptr1
+	txa
+	clc
+	adc     #>(_rollys)
+	sta     ptr1+1
+	ldy     #<(_rollys)
+	lda     (ptr1),y
+	beq     L03B9
+	ldx     #$00
+	jmp     L03BA
+;
+; rollys[i].top_y = MAX_Y + (SPRITE_HEIGHT); // offscreen
+;
+L03B9:	tax
+L03C4:	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     #$EF
+	ldy     #$01
+	sta     (ptr1),y
+;
+; ++offscreen_rollys;
+;
+	inc     _offscreen_rollys
+;
+; else {
+;
+	jmp     L03BB
+;
+; rollys[i].left_x = new_rolly_pos;
+;
+L03BA:	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	lda     _new_rolly_pos
+	ldy     #$00
+	sta     (ptr1),y
+;
+; for(i = 0; i < MAX_ROLLYS; ++i) {
+;
+L03BB:	inc     _i
+	jmp     L03B8
+;
+; rolly_count -= offscreen_rollys;
+;
+L03BC:	lda     _offscreen_rollys
+	eor     #$FF
+	sec
+	adc     _rolly_count
+	sta     _rolly_count
+;
+; SCROLL = ++h_scroll; // horizontal
 ;
 	inc     _h_scroll
-;
-; SCROLL = h_scroll; // horizontal
-;
 	lda     _h_scroll
 	sta     $2005
 ;
@@ -1404,177 +1959,22 @@ L0343:	lda     #$00
 ;
 	jsr     _UpdateInput
 ;
-; if( (JoyPad1 & BUTTON_UP) && player.sprite_offsets != ship_bank_up) {
+; UpdatePlayerSprite();
 ;
-	lda     _JoyPad1
-	and     #$08
-	beq     L0346
-	lda     #<(_ship_bank_up)
-	ldx     #>(_ship_bank_up)
-	cpx     _player+4+1
-	bne     L02CB
-	cmp     _player+4
-	beq     L0346
+	jsr     _UpdatePlayerSprite
 ;
-; player.sprite_offsets = ship_bank_up;
+; MovePlayer();
 ;
-L02CB:	lda     #<(_ship_bank_up)
-	sta     _player+4
-	lda     #>(_ship_bank_up)
-;
-; else if((JoyPad1 & BUTTON_DOWN) && 
-;
-	jmp     L033F
-L0346:	lda     _JoyPad1
-	and     #$04
-	beq     L0349
-;
-; (player.sprite_offsets != ship_bank_down) ) { 
-;
-	lda     #<(_ship_bank_down)
-	ldx     #>(_ship_bank_down)
-	cpx     _player+4+1
-	bne     L02D3
-	cmp     _player+4
-	beq     L0349
-;
-; player.sprite_offsets = ship_bank_down;
-;
-L02D3:	lda     #<(_ship_bank_down)
-	sta     _player+4
-	lda     #>(_ship_bank_down)
-;
-; else if( !(JoyPad1 & BUTTON_UP) && 
-;
-	jmp     L033F
-L0349:	lda     _JoyPad1
-	and     #$08
-	bne     L034B
-;
-; !(JoyPad1 & BUTTON_DOWN) && 
-;
-	lda     _JoyPad1
-	and     #$04
-	bne     L034B
-;
-; (player.sprite_offsets != ship_level ) ) {
-;
-	lda     #<(_ship_level)
-	ldx     #>(_ship_level)
-	cpx     _player+4+1
-	bne     L02DC
-	cmp     _player+4
-	beq     L034B
-;
-; player.sprite_offsets = ship_level;
-;
-L02DC:	lda     #<(_ship_level)
-	sta     _player+4
-	lda     #>(_ship_level)
-L033F:	sta     _player+4+1
-;
-; if( (JoyPad1 & BUTTON_UP) && 
-;
-L034B:	lda     _JoyPad1
-	and     #$08
-	beq     L034F
-;
-; (player.top_y > (MIN_Y + SPRITE_HEIGHT )) ) {
-;
-	lda     _player+1
-	cmp     #$11
-	bcc     L034F
-;
-; player.top_y -= 2;
-;
-	sec
-	sbc     #$02
-	sta     _player+1
-;
-; if( (JoyPad1 & BUTTON_DOWN) && 
-;
-L034F:	lda     _JoyPad1
-	and     #$04
-	beq     L0352
-;
-; ( (player.top_y + player.num_v_sprites + SPRITE_HEIGHT) < ( MAX_Y - (SPRITE_HEIGHT << 1) ) ) ){ 
-;
-	ldx     #$00
-	lda     _player+1
-	clc
-	adc     _player+3
-	bcc     L0340
-	inx
-	clc
-L0340:	adc     #$08
-	bcc     L02F3
-	inx
-L02F3:	cpx     #$00
-	bne     L02F6
-	cmp     #$D7
-L02F6:	bcs     L0352
-;
-; player.top_y += 2;
-;
-	lda     #$02
-	clc
-	adc     _player+1
-	sta     _player+1
-;
-; if( (JoyPad1 & BUTTON_RIGHT) && 
-;
-L0352:	lda     _JoyPad1
-	and     #$01
-	beq     L0355
-;
-; ( (player.left_x + player.num_h_sprites + SPRITE_WIDTH) < (MAX_X - (SPRITE_WIDTH << 1) ) ) ) {
-;
-	ldx     #$00
-	lda     _player
-	clc
-	adc     _player+2
-	bcc     L0341
-	inx
-	clc
-L0341:	adc     #$08
-	bcc     L0300
-	inx
-L0300:	cpx     #$00
-	bne     L0303
-	cmp     #$F0
-L0303:	bcs     L0355
-;
-; player.left_x += 2; 
-;
-	lda     #$02
-	clc
-	adc     _player
-	sta     _player
-;
-; if( (JoyPad1 & BUTTON_LEFT) && 
-;
-L0355:	lda     _JoyPad1
-	and     #$02
-	beq     L0359
-;
-; ( (player.left_x ) > (MIN_X + SPRITE_WIDTH) ) ) {
-;
-	lda     _player
-	cmp     #$09
-	bcc     L0359
-;
-; player.left_x -= 1;
-;
-	dec     _player
+	jsr     _MovePlayer
 ;
 ; if( JoyPad1 & BUTTON_A && !(PrevJoyPad1 & BUTTON_A) ) {
 ;
-L0359:	lda     _JoyPad1
+	lda     _JoyPad1
 	and     #$40
-	beq     L0311
+	beq     L0359
 	lda     _PrevJoyPad1
 	and     #$40
-	bne     L0311
+	bne     L0359
 ;
 ; AddLaser();
 ;
@@ -1582,11 +1982,15 @@ L0359:	lda     _JoyPad1
 ;
 ; laser_count -= CheckOffscreenLasers();
 ;
-L0311:	jsr     _CheckOffscreenLasers
+L0359:	jsr     _CheckOffscreenLasers
 	eor     #$FF
 	sec
 	adc     _laser_count
 	sta     _laser_count
+;
+; Debug();
+;
+	jsr     _Debug
 ;
 ; WriteMetaSpriteToOAM(&player);
 ;
@@ -1598,9 +2002,9 @@ L0311:	jsr     _CheckOffscreenLasers
 ;
 	lda     #$00
 	sta     _i
-L035D:	lda     _i
+L03C0:	lda     _i
 	cmp     #$05
-	jcs     L0343
+	bcs     L03C1
 ;
 ; WriteSpriteToOAM( &(lasers[i]) );
 ;
@@ -1619,7 +2023,60 @@ L035D:	lda     _i
 ; for(i = 0; i < MAX_LASERS; ++i) {
 ;
 	inc     _i
-	jmp     L035D
+	jmp     L03C0
+;
+; for(i = 0; i < MAX_ROLLYS; ++i) {
+;
+L03C1:	lda     #$00
+	sta     _i
+L03C2:	lda     _i
+	cmp     #$04
+	bcs     L0371
+;
+; if(rollys[i].top_y <= MAX_Y) {
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	sta     ptr1
+	txa
+	adc     #>(_rollys)
+	sta     ptr1+1
+	ldy     #$01
+	lda     (ptr1),y
+	cmp     #$E8
+	bcs     L03C3
+;
+; WriteMetaSpriteToOAM( &(rollys[i]) );
+;
+	ldx     #$00
+	lda     _i
+	jsr     mulax7
+	clc
+	adc     #<(_rollys)
+	tay
+	txa
+	adc     #>(_rollys)
+	tax
+	tya
+	jsr     _WriteMetaSpriteToOAM
+;
+; for(i = 0; i < MAX_ROLLYS; ++i) {
+;
+L03C3:	inc     _i
+	jmp     L03C2
+;
+; ++game_clock;
+;
+L0371:	inc     _game_clock
+	jne     L0306
+	inc     _game_clock+1
+;
+; while(1) {
+;
+	jmp     L0306
 
 .endproc
 
