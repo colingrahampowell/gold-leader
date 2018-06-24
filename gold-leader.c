@@ -311,10 +311,6 @@ void main (void) {
         // add enemies
         if( ((game_clock % 30) == 0) && (rolly_count < MAX_ROLLYS)) {
 
-            if(rolly_count < MAX_ROLLYS) {
-                player.sprite_offsets = ship_bank_down;
-            }
-
             // search for empty slot
             for(i = 0; i < MAX_ROLLYS; ++i) {
 
