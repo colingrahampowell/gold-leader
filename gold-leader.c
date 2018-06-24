@@ -309,7 +309,7 @@ void main (void) {
          */
 
         // add enemies
-        if( ((game_clock % 60) == 0) && (rolly_count < MAX_ROLLYS)) {
+        if( ((game_clock % 30) == 0) && (rolly_count < MAX_ROLLYS)) {
 
             if(rolly_count < MAX_ROLLYS) {
                 player.sprite_offsets = ship_bank_down;
