@@ -2,12 +2,9 @@
  * background.h: useful background-related constants
  */
 
-#ifndef BACKGROUND_H
-#define BACKGROUND_H
+#ifndef PPU_BACKGROUND_H
+#define PPU_BACKGROUND_H
 #include <stdint.h>
-
-// defined in reset.s
-void __fastcall__ UnRLE(const uint8_t *data);
 
 // nametable + palette data
 const uint8_t nametable_0[212]={

@@ -1,18 +1,19 @@
 /*	
- * simple Hello World, for cc65, for NES
- * adapted from: doug fraker, nesdoug.com
+ * gold leader - primary game loop
  */	
-
 
 #define TV_NTSC
 
-#include "ppu.h"
-#include "ppu_data.h"
-#include "reset.h"
-#include "input.h"
 #include "sprites.h"
 #include "background.h"
+#include "colors.h"
+#include "ppu.h"
+
+#include "reset.h"
+#include "input.h"
+
 #include <stdint.h>
+#include <stdlib.h>
 
 #pragma bss-name(push, "ZEROPAGE")
 
@@ -22,25 +23,25 @@ uint8_t new_laser_pos;
 uint8_t row;
 uint8_t col;
 
+// game clock
+uint16_t game_clock;
+
 uint8_t h_scroll;
 
 uint8_t attr_offset;
 uint8_t curr_sprite;
 
-uint8_t laser_count;
-
-uintptr_t ppu_addr;			// unsigned 16-bit type
-const uint8_t *ppu_data;	// unsigned 8-bit type
-uint8_t ppu_data_size;		// unsigned 8-bit type
-
-// nametable-to-sprite mapping tables
-uint8_t ship_level[ SHIP_SPRITE_HOR_TILES * SHIP_SPRITE_VERT_TILES ];
-uint8_t ship_bank_up[ SHIP_SPRITE_HOR_TILES * SHIP_SPRITE_VERT_TILES ];
-uint8_t ship_bank_down[ SHIP_SPRITE_HOR_TILES * SHIP_SPRITE_VERT_TILES ];
-
 // player 1 sprite (3 tiles wide x 2 tiles tall)
 metasprite_t player;
+
 sprite_t lasers[MAX_LASERS];
+uint8_t laser_count;
+
+// enemies
+metasprite_t rollys[MAX_ROLLYS];
+uint8_t rolly_count;
+uint8_t new_rolly_pos;
+uint8_t offscreen_rollys;
 
 #pragma bss-name(pop)
 
@@ -48,113 +49,35 @@ sprite_t lasers[MAX_LASERS];
 sprite_t oam_sprites[64];
 #pragma bss-name(pop)
 
-/*
- * DrawBackgroundRLE():
- */
-
-void DrawBackgroundRLE() {
-    
-    // set address of nametable 0
-    PPU_ADDRESS = (uint8_t) ((PPU_NAMETABLE_0 + NAMETABLE_OFFSET) >> 8); 	// right shift to write only hi-byte
-    PPU_ADDRESS = (uint8_t) (PPU_NAMETABLE_0 + NAMETABLE_OFFSET);		// now write lo ebyte
-
-    // decompress and draw nametable 0
-    UnRLE(nametable_0);
-
-    // set address of nametable 1
-    PPU_ADDRESS = (uint8_t) ((PPU_NAMETABLE_1 + NAMETABLE_OFFSET) >> 8); 	// right shift to write only hi-byte
-    PPU_ADDRESS = (uint8_t) (PPU_NAMETABLE_1 + NAMETABLE_OFFSET);		// now write lo ebyte
-    
-    // decompress and draw nametable 1
-    UnRLE(nametable_1);
-    
-}
-
-/* 
- * WritePPU():
- */
-
-void WritePPU() {
-    PPU_ADDRESS = (uint8_t) (ppu_addr >> 8); 	// right shift to write only hi-byte
-    PPU_ADDRESS = (uint8_t) (ppu_addr);		// now write lo byte
-    
-    for(i = 0; i < ppu_data_size; ++i){
-        PPU_DATA = ppu_data[i];
-    }	
-}
-
-/* 
- * ResetScroll():
- */
-
-void ResetScroll() {
-
-    /*
-     * first write horizontal offset, then vertical offset to PPUSCROLL
-     */
-
-    SCROLL = 0x00;	// horizontal
-    SCROLL = 0x00;	// vertical
-}
-
-/*
- * EnablePPU():
- */
-void EnablePPU() {
-
-    /*
-     * PPU_CTRL ($2000): PPU Control Register 
-     * http://wiki.nesdev.com/w/i.php/PPU_registers#Controller_.28.242000.29_.3E_write
-     * In this case, we set flags to:
-     * -- generate NMI (non-maskable interrupt) at start of vblank (bit 7)
-     * -- set sprite size to 8x8 (bit 5 == 0)
-     * -- set background pattern table to 0x1000 (bit 4 == 1)
-     * -- set sprite pattern table address to 0x0000 (bit 3 == 0)
-     * -- set VRAM to inc. address by 1 per CPU read/write, going across (bit 2 == 0) 
-     * -- set base nametable address to 0x2000 (bit 1 && 0 == 0)
-     */
-
-    //	turn on screen -- screen is on, NMI on
-    PPU_CTRL = 	PPUCTRL_NAMETABLE_0 | 	// use nametable 0
-                PPUCTRL_BPATTERN_1 	| 	// background uses pattern table 1
-                PPUCTRL_NMI_ON		|	// enable NMI
-                PPUCTRL_SPATTERN_0;		// sprites use pattern table 0
-
-    /*
-     * PPU_MASK ($2001): PPU Mask Register, controls rendering of sprites / background
-     * http://wiki.nesdev.com/w/i.php/PPU_registers#Mask_.28.242001.29_.3E_write
-     * In this case: we set flags to:
-     * -- show sprites (bit 4)
-     * -- show background (bit 3)
-     * -- show sprites in leftmost 8 pixels of screen (bit 2)
-     * -- show background in leftmost 8 pixels of screen (bit 1)
-     */
-
-    PPU_MASK = 	PPUMASK_COLOR 		| 	// show color
-                PPUMASK_BSHOW		|	// show background
-                PPUMASK_L8_BSHOW	|	// show bkgrd tiles in left 8 pixels
-                PPUMASK_SSHOW		|	// show sprites
-                PPUMASK_L8_SSHOW;		// show sprites in left 8 pixels
-
-}	
-
 /* 
  * WriteMetaSpriteToOAM()
  */
 
-void WriteMetaSpriteToOAM(metasprite_t* mspr) {
+void __fastcall__ WriteMetaSpriteToOAM(metasprite_t* mspr) {
 
-    for( i = 0; i < (player.num_v_sprites * player.num_h_sprites); ++i ) {
+    uint8_t col;
+    uint8_t row;
+    uint8_t sprite_base_offset = 0;
+    uint8_t height_offset = SPRITE_HEIGHT;
 
-        row = i / player.num_h_sprites;
-        col = i % player.num_h_sprites;
+    // for each row
+    for(row = 0; row < mspr->num_v_sprites; ++row ) {
+        // get offset into sprite_offsets array
+        sprite_base_offset = row * mspr->num_h_sprites;
+        height_offset = SPRITE_HEIGHT * row;
 
-        oam_sprites[curr_sprite].y = mspr->top_y + (SPRITE_HEIGHT * row);
-        oam_sprites[curr_sprite].tile_idx = mspr->sprite_offsets[i];
-        oam_sprites[curr_sprite].x = mspr->left_x + (SPRITE_WIDTH * col);
-        oam_sprites[curr_sprite].attr = 0x00;
+        // for each column
+        for(col = 0; col < mspr->num_h_sprites; ++col ) {
 
-        ++curr_sprite;
+            // place a sprite into OAM
+            oam_sprites[curr_sprite].y = mspr->top_y + height_offset;
+            oam_sprites[curr_sprite].tile_idx = mspr->sprite_offsets[col + sprite_base_offset];
+            oam_sprites[curr_sprite].x = mspr->left_x + (SPRITE_WIDTH * col);
+            oam_sprites[curr_sprite].attr = 0x00;
+
+            ++curr_sprite;
+        }
+
     }
 
 }
@@ -164,11 +87,13 @@ void WriteMetaSpriteToOAM(metasprite_t* mspr) {
  */
 
 void WriteSpriteToOAM(sprite_t* spr) {
+
     oam_sprites[curr_sprite].y = spr->y;
     oam_sprites[curr_sprite].tile_idx = spr->tile_idx;
     oam_sprites[curr_sprite].x = spr->x;
     oam_sprites[curr_sprite].attr = 0x00;
     ++curr_sprite;
+
 }
 
 /*
@@ -177,7 +102,8 @@ void WriteSpriteToOAM(sprite_t* spr) {
 
 int CheckOffscreenLasers() {
 
-    int offscreen_lasers = 0;
+    uint8_t offscreen_lasers = 0;
+    uint8_t i = 0;
 
     for(i = 0; i < MAX_LASERS; ++i ) {
         if( lasers[i].y < MAX_Y) {
@@ -205,6 +131,9 @@ int CheckOffscreenLasers() {
  */
 
 void AddLaser() {
+
+    uint8_t i = 0;
+
     // track max number of lasers on screen
     if(laser_count < MAX_LASERS) {
         i = 0;
@@ -221,6 +150,89 @@ void AddLaser() {
     }
 }
 
+/*
+ * UpdatePlayerSprite: updates player sprite based on controller input
+ */
+
+void UpdatePlayerSprite() {
+
+    // update sprite based on input (change sprite to simulate left/right bank manuever)
+    if( (JoyPad1 & BUTTON_UP) && player.sprite_offsets != ship_bank_up) {
+        player.sprite_offsets = ship_bank_up;
+    }
+    else if((JoyPad1 & BUTTON_DOWN) && 
+            (player.sprite_offsets != ship_bank_down) ) {	        
+        player.sprite_offsets = ship_bank_down;
+    }
+    else if( !(JoyPad1 & BUTTON_UP) && 
+             !(JoyPad1 & BUTTON_DOWN) && 
+             (player.sprite_offsets != ship_level ) ) {
+        player.sprite_offsets = ship_level;
+    }
+}
+
+/*
+ * MovePlayer: moves the player based on controller input
+ */
+
+void MovePlayer() {
+
+    /* 
+     * move up: player.top_y == top left sprite of player ship metasprite 
+     * (make sure hasn't reached top of screen)
+     */
+
+    if( (JoyPad1 & BUTTON_UP) && 
+        (player.top_y > (MIN_Y + SPRITE_HEIGHT )) ) {
+        player.top_y -= 2;
+    }
+
+    /*
+     * move down: player.top_y + player.num_v_sprites
+     * == bottom left sprite of player ship metasprite
+     * make sure hasn't reached bottom of screen
+     */
+
+    if( (JoyPad1 & BUTTON_DOWN) && 
+        ( (player.top_y + player.num_v_sprites + SPRITE_HEIGHT) < ( MAX_Y - (SPRITE_HEIGHT << 1) ) ) ){	
+        player.top_y += 2;
+    }
+
+    /* 
+     * move forward:
+     */
+
+    if( (JoyPad1 & BUTTON_RIGHT) && 
+        ( (player.left_x + player.num_h_sprites + SPRITE_WIDTH) < (MAX_X - (SPRITE_WIDTH << 1) ) ) ) {
+        player.left_x += 2;	
+    } 
+
+    /*
+     * move back:
+     */ 
+
+    if( (JoyPad1 & BUTTON_LEFT) && 
+        ( (player.left_x ) > (MIN_X) ) ) {
+        player.left_x -= 1;
+    }
+
+}
+
+/*
+ * AddEnemies: add enemy sprites based on clock state
+ */
+
+void AddEnemies() {
+
+    if( ((game_clock % 120) == 0) && (rolly_count < MAX_ROLLYS)) {
+
+        rollys[rolly_count].left_x = MAX_X - 0x01;
+        rollys[rolly_count].top_y = MAX_Y >> 0x02;
+
+        ++rolly_count;
+    }
+
+}
 
 
 /*
@@ -229,70 +241,30 @@ void AddLaser() {
 
 void main (void) {
 
-    /*
-     * LOADING THE PALETTE: 
-     * palette data is stored in mem addresses 0x3f00 to 0x3f1f
-     * that is, 4x8 bits = 32 bits of data, starting at 0x3f00
-     * we need to write this to PPU_DATA (0x2007), one byte at a time
-     */
-
-    ppu_addr = PPU_PALETTE;	// 0x3f00: palette memory
-    ppu_data = PALETTES; 
-    ppu_data_size = sizeof(PALETTES);
-    WritePPU();
-
-    /* 
-     * BACKGROUND TILES: NAMETABLE SETUP:
-     * nametable 0: 0x2000-0x23FF
-     * again, we write tiles to PPU_DATA, one at a time
-     * set position example:
-     * -- 32 (0x20) tiles per row, 30 (0x1d) rows (32 * 30 = 960 tiles)
-     * -- 1c6: 454th tile, or row 14, col 6
-    */
-
-    DrawBackgroundRLE();
+    game_clock = 0;
     h_scroll = 0;
 
+    LoadPalette(PALETTES, sizeof(PALETTES));
+    DrawBackgroundRLE(nametable_0, 0);
+    DrawBackgroundRLE(nametable_1, 1);
+   
     /*
      * SPRITE SETUP
      */
 
     curr_sprite = 0;
 
-    // this is very goofy...find a way to init this data in an array somewhere
-
-    ship_level[0] = 0x00;
-    ship_level[1] = 0x01;
-    ship_level[2] = 0x02;
-    ship_level[3] = 0x10;
-    ship_level[4] = 0x11;
-    ship_level[5] = 0x12;
-
-    ship_bank_up[0] = 0x03;
-    ship_bank_up[1] = 0x04;
-    ship_bank_up[2] = 0x05;
-    ship_bank_up[3] = 0x13;
-    ship_bank_up[4] = 0x14;
-    ship_bank_up[5] = 0x15;
-
-    ship_bank_down[0] = 0x06;
-    ship_bank_down[1] = 0x07;
-    ship_bank_down[2] = 0x08;
-    ship_bank_down[3] = 0x16;
-    ship_bank_down[4] = 0x17;
-    ship_bank_down[5] = 0x18;
-
     /* 
      * init player sprite
      */
 
-    player.left_x =  (MIN_X + SPRITE_WIDTH * 2);
-    player.top_y = (MAX_Y / 2 - SPRITE_HEIGHT / 2);
+    player.left_x = ( MIN_X + (SPRITE_WIDTH << 1) );
+    player.top_y = ( (MAX_Y >> 1) - (SPRITE_HEIGHT >> 1) );
     player.num_h_sprites = SHIP_SPRITE_HOR_TILES;
     player.num_v_sprites = SHIP_SPRITE_VERT_TILES;
     player.sprite_offsets = ship_level;
 
-    WriteMetaSpriteToOAM(&player);	// write player sprite to OAM
+    //WriteMetaSpriteToOAM(&player);	// write player sprite to OAM
 
     /*
      * init laser sprites
@@ -304,98 +276,121 @@ void main (void) {
         lasers[i].tile_idx = LASER_SPRITE;
     }
 
+    /*
+     * init rolly sprites
+     */
+
+    rolly_count = 0;
+    offscreen_rollys = 0;
+    for(i = 0; i < MAX_ROLLYS; ++i) {
+        rollys[i].num_h_sprites = ROLLY_HOR_TILES;
+        rollys[i].num_v_sprites = ROLLY_VERT_TILES;
+        rollys[i].sprite_offsets = rolly_state_1;
+        rollys[i].ticks = 0;
+        rollys[i].top_y = MAX_Y + (SPRITE_HEIGHT);    // offscreen
+        rollys[i].left_x = MAX_X;   // offscreen   
+    }
+
+
     ResetScroll();
     EnablePPU();
 
+
     while(1) {
 
-        curr_sprite = 0;
-
         // wait for graphics data to be updated in nmi
-        WaitFrame();
-    
         // wait for vblank to update display
-        curr_sprite = 0;
-        h_scroll += 1;
 
-        SCROLL = h_scroll;	// horizontal
+        WaitFrame();
+        curr_sprite = 0;
+
+        /*
+         * now, go!
+         */
+
+        // add enemies
+        if( ((game_clock % 30) == 0) && (rolly_count < MAX_ROLLYS)) {
+
+            if(rolly_count < MAX_ROLLYS) {
+                player.sprite_offsets = ship_bank_down;
+            }
+
+            // search for empty slot
+            for(i = 0; i < MAX_ROLLYS; ++i) {
+
+                if( rollys[i].top_y > MAX_Y ) {
+                    rollys[i].left_x = (MAX_X - SPRITE_WIDTH << 0x01);
+                    rollys[i].top_y = SPRITE_HEIGHT + (rand() % (MAX_Y - SPRITE_HEIGHT) );
+                    ++rolly_count;
+                    break;
+
+                }
+            }
+
+        }
+
+        offscreen_rollys = 0;
+
+        // move rollys
+        for(i = 0; i < MAX_ROLLYS; ++i) {
+
+            // if rolly is 'active' --> not offscreen
+            if( rollys[i].top_y <= MAX_Y) {
+
+                new_rolly_pos = rollys[i].left_x -= ROLLY_SPEED;
+                // if overflow, new pos < old pos
+                // also possible that x > offscreen position (0xf9-0xff)
+                if( rollys[i].left_x < new_rolly_pos || rollys[i].left_x == 0 ) {
+                    rollys[i].top_y = MAX_Y + (SPRITE_HEIGHT); // offscreen
+                    ++offscreen_rollys;
+                }
+                else {
+                    rollys[i].left_x = new_rolly_pos;
+                }
+
+            }
+
+        }
+
+        rolly_count -= offscreen_rollys;
+    
+        SCROLL = ++h_scroll;	// horizontal
         SCROLL = 0x0;
 
         UpdateInput();
+        UpdatePlayerSprite();
 
-        // update sprite based on input (change sprite to simulate left/right bank manuever)
+        MovePlayer();
 
-        if( (JoyPad1 & BUTTON_UP) && player.sprite_offsets != ship_bank_up) {
-            player.sprite_offsets = ship_bank_up;
-        }
-        else if((JoyPad1 & BUTTON_DOWN) && 
-                (player.sprite_offsets != ship_bank_down) ) {	
-            player.sprite_offsets = ship_bank_down;
-        }
-        else if( !(JoyPad1 & BUTTON_UP) && 
-                 !(JoyPad1 & BUTTON_DOWN) && 
-                 (player.sprite_offsets != ship_level ) ) {
-            player.sprite_offsets = ship_level;
-        }
+        // add new enemies
+        // AddEnemies();
+        // rolly_count -= MoveEnemies();
 
-        /* 
-         * move up: player.top_y == top left sprite of player ship metasprite 
-         * (make sure hasn't reached top of screen)
-         */
-
-        if( (JoyPad1 & BUTTON_UP) && 
-            (player.top_y > (MIN_Y + SPRITE_HEIGHT )) ) {
-            player.top_y -= 2;
-        }
-
-        /*
-         * move down: player.top_y + player.num_v_sprites
-         * == bottom left sprite of player ship metasprite
-         * make sure hasn't reached bottom of screen
-         */
-
-        if( (JoyPad1 & BUTTON_DOWN) && 
-            ( (player.top_y + player.num_v_sprites + SPRITE_HEIGHT) < (MAX_Y - 2 * SPRITE_HEIGHT) ) ){	
-            player.top_y += 2;
-        }
-
-        /* 
-         * move forward:
-         */
-
-        if( (JoyPad1 & BUTTON_RIGHT) && 
-            ( (player.left_x + player.num_h_sprites + SPRITE_WIDTH) < (MAX_X - 2 * SPRITE_WIDTH ) ) ) {
-            player.left_x += 2;	
-        } 
-
-        /*
-         * move back:
-         */ 
-
-        if( (JoyPad1 & BUTTON_LEFT) && 
-            ( (player.left_x ) > (MIN_X + SPRITE_WIDTH) ) ) {
-            player.left_x -= 1;
-        } 
-
-        /* 
-         * fire lasers: only fire on discrete button presses 
-         */
-
+         // fire lasers: only fire on discrete button presses 
         if( JoyPad1 & BUTTON_A && !(PrevJoyPad1 & BUTTON_A) ) {
             AddLaser();
         }
         laser_count -= CheckOffscreenLasers();
 
-        /*
-         * write updated data to OAM
-         */
+        // check enemy collisions...
 
+        // write updated data to OAM
         WriteMetaSpriteToOAM(&player);
+
         for(i = 0; i < MAX_LASERS; ++i) {
             WriteSpriteToOAM( &(lasers[i]) );
         }
 
+        for(i = 0; i < MAX_ROLLYS; ++i) {
+            if(rollys[i].top_y <= MAX_Y) {
+                WriteMetaSpriteToOAM( &(rollys[i]) );
+            }
+        }
+
+        ++game_clock;
+
     }
+
 }
     
     
