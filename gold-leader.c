@@ -349,9 +349,6 @@ void main (void) {
         }
 
         rolly_count -= offscreen_rollys;
-    
-        SCROLL = ++h_scroll;	// horizontal
-        SCROLL = 0x0;
 
         UpdateInput();
         UpdatePlayerSprite();

@@ -17,6 +17,7 @@ PPU_CTRL =		$2000
 PPU_MASK = 		$2001
 PPU_STATUS = 	$2002
 OAM_ADDRESS = 	$2003
+SCROLL =        $2005
 PPU_DATA = 		$2007
 APU_DMC = 		$4010
 OAM_DMA = 		$4014
@@ -40,6 +41,9 @@ RLE_LOW:		.res 1
 RLE_HIGH:		.res 1
 RLE_TAG:		.res 1
 RLE_BYTE:		.res 1
+
+; horizontal scroll counter
+h_scroll:       .res 1
 
 ; general-purpose global var for debug function
 debug_var:      .res 1
@@ -237,6 +241,14 @@ nmi:
     ; free _WaitFrame
     lda #$0
     sta frame_done
+
+    ; update ppu_scroll (write horizontal scroll, then vertical scroll)
+    inc h_scroll
+    lda h_scroll 
+    sta SCROLL
+
+    lda #$0
+    sta SCROLL
 
     ; pop registers stored on stack back into place
     pla	
